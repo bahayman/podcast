@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Simple Podcast Thingy</title>
+
+    <!-- Bootstrap -->
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/main.css">
+
+    <!-- <script src="js/react-with-addons.min.js"></script> -->
+    <script src="js/react-with-addons.js"></script>
+    <script src="js/JSXTransformer.js"></script>
+
+    <script src="js/jquery-2.1.0.min.js"></script>
+    <script src="js/lodash.min.js"></script>
+    <script src="js/backbone-min.js"></script>
+    <script src="js/moment.min.js"></script>
+
+    <script src="js/bootstrap.min.js"></script>
+
+    <script type="text/javascript">
+
+        var clientId = '1003524583923-039l7f9uc3m4vet539hkctnruo9svm05.apps.googleusercontent.com',
+            apiKey = 'AIzaSyDvn7hIeo-Y08aRCAWRlp3BvT_xoSKtr10',
+            scopes = 'https://www.googleapis.com/auth/appstate';
+
+        function handleClientLoad() {
+            gapi.client.setApiKey(apiKey);
+            gapi.auth.authorize({client_id: clientId, scope: scopes, immediate: true}, function (authResult) {
+                if (authResult && !authResult.error) {
+                    showIndex();
+                } else {
+                    showLogin();
+                }
+            });
+        }
+
+    </script>
+    <script src="https://apis.google.com/js/client.js?onload=handleClientLoad"></script>
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <script type="text/jsx" src="react/login.js"></script>
+    <script type="text/jsx" src="react/index.js"></script>
+
+    <script type="text/jsx">
+        /** @jsx React.DOM */
+
+        function showIndex() {
+            React.renderComponent(
+                <IndexComponent />,
+                document.getElementById('container')
+            );
+        }
+
+        function showLogin() {
+            React.renderComponent(
+                <LoginComponent />,
+                document.getElementById('container')
+            );
+        }
+
+        showLogin();
+            
+    </script>
+</head>
+<body>
+    <div class="navbar navbar-default navbar-static-top" role="navigation">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="#">Simple Podcast Thingy</a>
+            </div>
+            <div class="navbar-collapse collapse">
+                <ul class="nav navbar-nav navbar-right">
+                    <li>
+                        <a href="#help">Help</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div id="container" class="container">
+    </div>
+</body>
+</html>
