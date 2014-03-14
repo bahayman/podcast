@@ -150,9 +150,11 @@ var IndexComponent = React.createClass({
 
         this.setState({ selectedEpisode: episode });
     },
-    pauseEpisode: function () {
+    togglePauseEpisode: function () {
         var player = this.refs.player.getPlayer().getDOMNode();
-        if (!player.paused) {
+        if (player.paused) {
+            player.play();
+        } else {
             player.pause();
             this.saveCurrentTime();
         }
@@ -217,7 +219,7 @@ var IndexComponent = React.createClass({
                         <hr className="visible-xs" />
                     </div>
                     <div className="col-xs-12 col-sm-8">
-                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} pause={this.pauseEpisode} toggleListened={this.toggleListened} />
+                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} togglePause={this.togglePauseEpisode} toggleListened={this.toggleListened} />
                     </div>
                 </div>
             </div>
@@ -309,7 +311,7 @@ var PodcastDisplayComponent = React.createClass({
                                                     <span title={episode.pubDate.format('LLLL')}>{date}</span><br />
                                                     <small>{episode.durationText}</small>
                                                     <p>
-                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.pause}>
+                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.togglePause}>
                                                             <span className="glyphicon glyphicon-pause"></span> Playing
                                                         </button>
                                                         <button type="button" className={'col-xs-6 col-sm-12 btn btn-default btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode)}>
