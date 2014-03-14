@@ -327,7 +327,8 @@ var PodcastPlayerComponent = React.createClass({
         return this.refs.player;
     },
     render: function () {
-        var episode = this.props.data || { title: 'No episode selected' };
+        var episode = this.props.data || {};
+        _.defaults(episode, { title: 'No episode selected', pubDate: moment(0) });
 
         return (
             <div className="panel panel-default">
@@ -337,16 +338,16 @@ var PodcastPlayerComponent = React.createClass({
                 <div className="panel-body">
                     <div className={'row ' + (episode.url ? 'visible' : 'hidden')}>
                         <div className="col-xs-12 col-sm-4">
-                            <audio autoPlay="true" controls src={episode.url} ref="player">
-                                Your browser does not support the audio element.
-                            </audio>
+                            <video className="col-xs-12 col-sm-12" autoPlay="true" controls src={episode.url} ref="player">
+                                Your browser does not support the video element.
+                            </video>
                         </div>
                         <div className="col-xs-12 col-sm-8">
                             <dl className="dl-horizontal">
                                 <dt>Date</dt>
                                 <dd>
-                                    <span title={(episode.pubDate || { format: $.noop }).format('LLLL')}>
-                                        {(episode.pubDate || { fromNow: $.noop }).fromNow()}
+                                    <span title={episode.pubDate.format('LLLL')}>
+                                        {episode.pubDate.fromNow()}
                                     </span>
                                 </dd>
                                 <dt>Duration</dt>
