@@ -51,7 +51,7 @@ var IndexComponent = React.createClass({
             if (this.state.selectedPodcast === podcast) {
                 this.setState({ selectedPodcast: null });
             }
-            this.setState({ podcasts: _.pull(this.state.podcasts, podcast) });
+            this.setState({ podcasts: _.without(this.state.podcasts, podcast) });
 
             this.savePodcastList();
         }
@@ -69,7 +69,8 @@ var IndexComponent = React.createClass({
                     data: JSON.stringify(_.map(this.state.podcasts, function (podcast) {
                         return {
                             url: podcast.url,
-                            positions: podcast.positions
+                            positions: podcast.positions,
+                            listened: podcast.listened
                         }
                     }, this))
                 }
@@ -114,6 +115,7 @@ var IndexComponent = React.createClass({
                 podcast.image = (_.first(feed.channel.image, 'url') || [{ url: false }])[0].url;
                 podcast.episodes = [];
                 podcast.positions = podcast.positions || [];
+                podcast.listened = podcast.listened || [];
                 _.forEach(feed.channel.item, function (episode) {
                     episode = {
                         podcast: podcast,
@@ -148,12 +150,28 @@ var IndexComponent = React.createClass({
 
         this.setState({ selectedEpisode: episode });
     },
-    pauseEpisode: function () {
+    togglePauseEpisode: function () {
         var player = this.refs.player.getPlayer().getDOMNode();
-        if (!player.paused) {
+        if (player.paused) {
+            player.play();
+        } else {
             player.pause();
             this.saveCurrentTime();
         }
+    },
+    toggleListened: function (episode) {
+        var without = _.without(episode.podcast.listened, episode.url);
+
+        // not removed from listened array, have to add it instead
+        if (without.length === episode.podcast.listened.length) {
+            episode.podcast.listened.push(episode.url);
+        } else {
+            episode.podcast.listened = without;
+        }
+
+        this.setState({ podcasts: this.state.podcasts });
+
+        this.savePodcastList();
     },
     saveCurrentTime: function () {
         var player = this.refs.player.getPlayer().getDOMNode();
@@ -201,7 +219,7 @@ var IndexComponent = React.createClass({
                         <hr className="visible-xs" />
                     </div>
                     <div className="col-xs-12 col-sm-8">
-                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} pause={this.pauseEpisode} />
+                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} togglePause={this.togglePauseEpisode} toggleListened={this.toggleListened} />
                     </div>
                 </div>
             </div>
@@ -242,6 +260,14 @@ var PodcastDisplayComponent = React.createClass({
         data: React.PropTypes.object,
         play: React.PropTypes.func.isRequired
     },
+    getInitialState: function () {
+        return {
+            showHidden: false
+        };
+    },
+    toggleShowHidden: function () {
+        this.setState({ showHidden: !this.state.showHidden });
+    },
     render: function () {
         if (!this.props.data) {
             return (
@@ -254,7 +280,14 @@ var PodcastDisplayComponent = React.createClass({
         return (
             <div className="panel panel-default">
                 <div className="panel-heading">
-                    <h3 className="panel-title">{this.props.data.title}</h3>
+                    <div className="row">
+                    <h3 className="panel-title col-xs-12 col-sm-10">
+                        {this.props.data.title}
+                    </h3>
+                    <p className={'col-xs-12 col-sm-2 ' + (this.props.data.listened.length === 0 ? 'hidden' : 'visible')}>
+                        <button type="button" className="btn btn-xs btn-default" onClick={this.toggleShowHidden}>{this.state.showHidden ? 'Hide' : 'Show' } Read</button>
+                    </p>
+                    </div>
                 </div>
                 <div className="panel-body">
                     <table className="table table-hover">
@@ -262,6 +295,7 @@ var PodcastDisplayComponent = React.createClass({
                             {
                                 _.map(this.props.data.episodes, function (episode) {
                                     var position = _.find(episode.podcast.positions, { url: episode.url }),
+                                        listened = _.contains(this.props.data.listened, episode.url),
                                         date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('dddd, MMM D, YYYY') : episode.pubDate.format('dddd');
 
                                     if (position && position.currentTime) {
@@ -271,17 +305,20 @@ var PodcastDisplayComponent = React.createClass({
                                     }
 
                                     return (
-                                        <tr>
+                                        <tr className={(!this.state.showHidden && listened) ? 'hidden' : 'visible'}>
                                             <td>
                                                 <div className="col-xs-12 col-sm-3">
                                                     <span title={episode.pubDate.format('LLLL')}>{date}</span><br />
                                                     <small>{episode.durationText}</small>
                                                     <p>
-                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.pause}>
+                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.togglePause}>
                                                             <span className="glyphicon glyphicon-pause"></span> Playing
                                                         </button>
                                                         <button type="button" className={'col-xs-6 col-sm-12 btn btn-default btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode)}>
                                                             <span className="glyphicon glyphicon-play"></span> {position || 'Play'}
+                                                        </button>
+                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-sm ' + (listened ? 'btn-info' : 'btn-warning')} onClick={this.props.toggleListened.bind(null, episode)}>
+                                                            <span className="glyphicon glyphicon-check"></span> Mark {listened ? 'Unread' : 'Read'}
                                                         </button>
                                                     </p>
                                                 </div>
@@ -327,7 +364,8 @@ var PodcastPlayerComponent = React.createClass({
         return this.refs.player;
     },
     render: function () {
-        var episode = this.props.data || { title: 'No episode selected' };
+        var episode = this.props.data || {};
+        _.defaults(episode, { title: 'No episode selected', pubDate: moment(0) });
 
         return (
             <div className="panel panel-default">
@@ -337,16 +375,16 @@ var PodcastPlayerComponent = React.createClass({
                 <div className="panel-body">
                     <div className={'row ' + (episode.url ? 'visible' : 'hidden')}>
                         <div className="col-xs-12 col-sm-4">
-                            <audio autoPlay="true" controls src={episode.url} ref="player">
-                                Your browser does not support the audio element.
-                            </audio>
+                            <video className="col-xs-12 col-sm-12" autoPlay="true" controls src={episode.url} ref="player">
+                                Your browser does not support the video element.
+                            </video>
                         </div>
                         <div className="col-xs-12 col-sm-8">
                             <dl className="dl-horizontal">
                                 <dt>Date</dt>
                                 <dd>
-                                    <span title={(episode.pubDate || { format: $.noop }).format('LLLL')}>
-                                        {(episode.pubDate || { fromNow: $.noop }).fromNow()}
+                                    <span title={episode.pubDate.format('LLLL')}>
+                                        {episode.pubDate.fromNow()}
                                     </span>
                                 </dd>
                                 <dt>Duration</dt>
