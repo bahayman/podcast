@@ -48,7 +48,6 @@ var IndexComponent = React.createClass({
             if (this.state.selectedPodcast === podcast) {
                 this.setState({ selectedPodcast: null });
             }
-            debugger;
             this.setState({ podcasts: _.pull(this.state.podcasts, podcast) });
 
             this.savePodcastList();
@@ -125,9 +124,22 @@ var IndexComponent = React.createClass({
         this.setState({ selectedPodcast: podcast });
     },
     playEpisode: function (episode) {
+        this.saveCurrentTime();
+
         this.setState({ selectedEpisode: episode });
     },
-    saveCurrentTime: function (currentTime) {
+    pauseEpisode: function () {
+        var player = this.refs.player.getPlayer().getDOMNode();
+        if (!player.paused) {
+            player.pause();
+            this.saveCurrentTime();
+        }
+    },
+    saveCurrentTime: function () {
+        var player = this.refs.player.getPlayer().getDOMNode();
+
+        if (player.currentTime < 10) { return; }
+
         var positions = this.state.selectedEpisode.podcast.positions,
             position = _.find(positions, { url: this.state.selectedEpisode.url });
 
@@ -136,7 +148,7 @@ var IndexComponent = React.createClass({
             positions.push(position);
         }
 
-        position.currentTime = currentTime;
+        position.currentTime = player.currentTime;
 
         this.setState({ selectedEpisode: this.state.selectedEpisode });
 
@@ -147,22 +159,24 @@ var IndexComponent = React.createClass({
             <div>
                 <div className="row">
                     <div className="col-xs-12">
-                        <PodcastPlayerComponent data={this.state.selectedEpisode} save={this.saveCurrentTime} />
+                        <PodcastPlayerComponent ref="player" data={this.state.selectedEpisode} save={this.saveCurrentTime} />
                     </div>
                 </div>
                 <div className="row">
                     <div className="col-xs-12 col-sm-4">
                         <PodcastListComponent data={this.state.podcasts} select={this.selectPodcast} selectedPodcast={this.state.selectedPodcast} delete={this.deletePodcast} />
-                        <div className="input-group">
-                            <input type="text" className="form-control" ref="addPodcastUrl" placeholder="Podcast RSS URL" defaultValue="http://feeds.twit.tv/floss.xml" />
-                            <span className="input-group-btn">
-                                <button className="btn btn-default" type="button" onClick={this.addPodcast}>Add</button>
-                            </span>
-                        </div>
+                        <p>
+                            <div className="input-group">
+                                <input type="text" className="form-control" ref="addPodcastUrl" placeholder="Podcast RSS URL" />
+                                <span className="input-group-btn">
+                                    <button className="btn btn-default" type="button" onClick={this.addPodcast}>Add</button>
+                                </span>
+                            </div>
+                        </p>
                         <hr className="visible-xs" />
                     </div>
                     <div className="col-xs-12 col-sm-8">
-                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} />
+                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} pause={this.pauseEpisode} />
                     </div>
                 </div>
             </div>
@@ -188,7 +202,6 @@ var PodcastListComponent = React.createClass({
                                 <a className="col-xs-11" href="#">
                                     <img src={podcast.image} className="col-xs-11 col-sm-4" />
                                     <div className="hidden-xs col-sm-7">{podcast.title}</div>
-                                    <button type="button" className="col-xs-1 btn-link btn-xs" onClick={this.props.delete.bind(null, podcast)}><span className="glyphicon glyphicon-remove-circle"></span></button>
                                 </a>
                             </li>
                         );
@@ -226,29 +239,30 @@ var PodcastDisplayComponent = React.createClass({
                                     var position = _.find(episode.podcast.positions, { url: episode.url }),
                                         date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('dddd, MMM D, YYYY') : episode.pubDate.format('dddd');
 
+                                    if (position && position.currentTime) {
+                                        position = _(['hours', 'minutes', 'seconds']).map(function (unit) {
+                                            return ('0' + this.get(unit)).slice(-2);
+                                        }, moment.duration(position.currentTime * 1000)).value().join(':');
+                                    }
+
                                     return (
                                         <tr>
                                             <td>
                                                 <div className="col-xs-12 col-sm-3">
                                                     <span title={episode.pubDate.format('LLLL')}>{date}</span><br />
                                                     <small>{episode.durationText}</small>
+                                                    <p>
+                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.pause}>
+                                                            <span className="glyphicon glyphicon-pause"></span> Playing
+                                                        </button>
+                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-default btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode)}>
+                                                            <span className="glyphicon glyphicon-play"></span> {position || 'Play'}
+                                                        </button>
+                                                    </p>
                                                 </div>
-                                                <div className="col-xs-12 col-sm-7">
+                                                <div className="col-xs-12 col-sm-9">
                                                     <h5>{episode.title}</h5>
                                                     <p><small>{episode.subtitle}</small></p>
-                                                </div>
-                                                <div className="col-xs-12 col-sm-2">
-                                                    <div className="col-xs-6 col-sm-12">
-                                                        <button type="button" className={'btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode)}>
-                                                            <span className="glyphicon glyphicon-play"></span> Playing
-                                                        </button>
-                                                        <button type="button" className={'btn btn-default btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode)}>
-                                                            <span className="glyphicon glyphicon-play"></span> {position ? 'Resume' : 'Play'}
-                                                        </button>
-                                                        <button type="button" className="btn btn-danger btn-sm">
-                                                            <span className="glyphicon glyphicon-ok-circle"></span> Read
-                                                        </button>
-                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -271,8 +285,8 @@ var PodcastPlayerComponent = React.createClass({
     },
     componentDidMount: function () {
         var player = this.refs.player.getDOMNode();
-        
-        player.addEventListener('canplay', function () {
+
+        $(player).on('durationchange', function () {
             var position = _.find(this.props.data.podcast.positions, { url: this.props.data.url });
 
             if (position && position.currentTime) {
@@ -280,9 +294,12 @@ var PodcastPlayerComponent = React.createClass({
             }
         }.bind(this));
 
-        player.addEventListener('pause', function (e) {
-            this.props.save(player.currentTime);
+        $(player).on('pause', function () {
+            this.props.save();
         }.bind(this));
+    },
+    getPlayer: function () {
+        return this.refs.player;
     },
     render: function () {
         var episode = this.props.data || { title: 'No episode selected' };
