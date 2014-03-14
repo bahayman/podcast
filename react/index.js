@@ -34,12 +34,15 @@ var IndexComponent = React.createClass({
         }.bind(this));
     },
     addPodcast: function () {
-        var url = this.refs.addPodcastUrl.getDOMNode().value;
+        var node = this.refs.addPodcastUrl.getDOMNode(),
+            url = node.value;
 
         this.state.podcasts.push({ url: url });
         this.setState({ podcasts: this.state.podcasts });
 
         this.savePodcastList();
+
+        node.value = '';
 
         this.reloadPodcast(url);
     },
@@ -75,19 +78,31 @@ var IndexComponent = React.createClass({
             }.bind(this));
         }.bind(this));
     },
+    deleteAllData: function () {
+        if (confirm('Are you sure you want to delete ALL data?')) {
+            this.setState({ podcasts: [] });
+            this.savePodcastList();
+        }
+    },
     reloadPodcast: function (url) {
         var reloadList = _(this.state.podcasts);
         if (url) { 
             reloadList = reloadList.where({ url: url });
         } 
 
+        if (reloadList.value().length === 0) { return; }
+
         $.getJSON('http://query.yahooapis.com/v1/public/yql', {
             format: 'json',
             q: 'select * from xml where ' + reloadList.map(function (podcast) {
                 return 'url = "' + podcast.url + '"';
             }).value().join(' or ')
-        }, function (result) {
+        })
+        .done(function (result) {
             if (result.query.count === 0) {
+                alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
+                this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) });
+                this.savePodcastList();
                 return;
             }
 
@@ -118,6 +133,11 @@ var IndexComponent = React.createClass({
                 // this.state.podcasts[podcast.url] = podcast;
                 this.setState({ podcasts: this.state.podcasts });
             }, this);
+        }.bind(this))
+        .fail(function () {
+            alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
+            this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) });
+            this.savePodcastList();
         }.bind(this));
     },
     selectPodcast: function (podcast) {
@@ -172,6 +192,11 @@ var IndexComponent = React.createClass({
                                     <button className="btn btn-default" type="button" onClick={this.addPodcast}>Add</button>
                                 </span>
                             </div>
+                        </p>
+                        <p>
+                            <button type="button" className="col-xs-12 btn btn-danger" onClick={this.deleteAllData}>
+                                <span className="glyphicon glyphicon-trash"></span> Delete All Data
+                            </button>
                         </p>
                         <hr className="visible-xs" />
                     </div>
