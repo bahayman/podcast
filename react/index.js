@@ -112,18 +112,18 @@ var IndexComponent = React.createClass({
             reloadList.forEach(function (podcast, index) {
                 var feed = podcast._feed = feeds[index];
                 podcast.title = feed.channel.title;
-                podcast.image = (_.first(feed.channel.image, 'url') || [{ url: false }])[0].url;
+                podcast.image = (_.find(feed.channel.image, 'url') || { url: false }).url;
                 podcast.episodes = [];
                 podcast.positions = podcast.positions || [];
                 podcast.listened = podcast.listened || [];
                 _.forEach(feed.channel.item, function (episode) {
                     episode = {
                         podcast: podcast,
-                        url: episode.content.url,
+                        url: (episode.content || episode.enclosure || {url: ''}).url,
                         title: episode.title,
-                        subtitle: episode.subtitle,
+                        subtitle: (episode.subtitle || $('<div></div>').html(episode.summary).text()),
                         pubDate: moment(episode.pubDate, 'ddd, DD MMM YYYY HH:mm:ss ZZ'),
-                        duration: moment.duration(episode.duration), 
+                        duration: moment.duration(("00:" + episode.duration).slice(-8)), 
                     };
                     episode.durationText = _(['days', 'hours', 'minutes', 'seconds']).map(function (unit) {
                         var count = this.get(unit);
