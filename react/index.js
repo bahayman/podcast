@@ -112,7 +112,7 @@ var IndexComponent = React.createClass({
             reloadList.forEach(function (podcast, index) {
                 var feed = podcast._feed = feeds[index];
                 podcast.title = feed.channel.title;
-                podcast.image = (_.find(feed.channel.image, 'url') || { url: false }).url;
+                podcast.image = (_.find(feed.channel.image, 'url') || { url: 'http://placehold.it/61x61&text=404' }).url;
                 podcast.episodes = [];
                 podcast.positions = podcast.positions || [];
                 podcast.listened = podcast.listened || [];
