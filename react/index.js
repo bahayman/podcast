@@ -385,9 +385,13 @@ var PodcastPlayerComponent = React.createClass({
 
         if (player !== this.state.player) {
             this.setState({ player: player }, function () {
-                var DOMNode = player.getDOMNode();
+                var DOMNode = player.getDOMNode(),
+                    throttle = _.throttle(this.props.save, 60 * 1000, { leading: false, trailing: true });
 
                 $(DOMNode)
+                    .on('timeupdate', function () {
+                        throttle();
+                    }.bind(this))
                     .on('durationchange', function () {
                         var position = _.find(this.props.data.podcast.positions, { url: this.props.data.url });
 
