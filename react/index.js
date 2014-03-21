@@ -14,6 +14,8 @@ var IndexComponent = React.createClass({
         };
     },
     componentWillMount: function () {
+        eventThingy.trigger('start_loading');
+
         gapi.client.load('appstate', 'v1', function() {
             gapi.client.appstate.states.list({
                 includeData: true
@@ -23,19 +25,23 @@ var IndexComponent = React.createClass({
                 var podcastList = _.find(response.items, { stateKey: 0 });
                 if (podcastList) {
                     this.state.currentStateVersion[0] = response.currentStateVersion;
-                    this.setState({ currentStateVersion: this.state.currentStateVersion });
                     podcastList = JSON.parse(podcastList.data);
-                    if (_.isArray(podcastList)) {
-                        this.setState({ podcasts: podcastList });
-                        this.reloadPodcast();
-                    }
+                    this.setState({ currentStateVersion: this.state.currentStateVersion, podcasts: podcastList }, function () {
+                        if (_.isArray(podcastList)) {
+                            this.reloadPodcast();
+                        }
+                    });
                 }
+
+                eventThingy.trigger('stop_loading');
             }.bind(this));
         }.bind(this));
     },
     addPodcast: function () {
         var node = this.refs.addPodcastUrl.getDOMNode(),
             url = node.value;
+
+        if (!url) { return; }
 
         this.state.podcasts.push({ url: url });
         this.setState({ podcasts: this.state.podcasts });
@@ -59,6 +65,8 @@ var IndexComponent = React.createClass({
         return false;
     },
     savePodcastList: function () {
+        eventThingy.trigger('start_loading');
+
         gapi.client.appstate.states.delete({
             stateKey: 0
         }).execute(function (response) {
@@ -75,6 +83,8 @@ var IndexComponent = React.createClass({
                     }, this))
                 }
             }).execute(function (response) {
+                eventThingy.trigger('stop_loading');
+
                 console.log(response);
             }.bind(this));
         }.bind(this));
@@ -92,6 +102,8 @@ var IndexComponent = React.createClass({
         } 
 
         if (reloadList.value().length === 0) { return; }
+
+        eventThingy.trigger('start_loading');
 
         $.getJSON('http://query.yahooapis.com/v1/public/yql', {
             format: 'json',
@@ -140,15 +152,22 @@ var IndexComponent = React.createClass({
             alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
             this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) });
             this.savePodcastList();
-        }.bind(this));
+        }.bind(this))
+        .always(function () {
+            eventThingy.trigger('stop_loading');
+        });
     },
     selectPodcast: function (podcast) {
         this.setState({ selectedPodcast: podcast });
+
+        return false;
     },
     playEpisode: function (episode) {
         this.saveCurrentTime();
 
-        this.setState({ selectedEpisode: episode });
+        this.setState({ selectedEpisode: episode }, function () {
+            $('window, body').animate({ scrollTop: 0 }, 'slow');
+        }.bind(this));
     },
     togglePauseEpisode: function () {
         var player = this.refs.player.getPlayer().getDOMNode();
@@ -173,10 +192,13 @@ var IndexComponent = React.createClass({
 
         this.savePodcastList();
     },
-    saveCurrentTime: function () {
+    saveCurrentTime: function (callback) {
         var player = this.refs.player.getPlayer().getDOMNode();
 
-        if (player.currentTime < 10) { return; }
+        if (player.currentTime < 10) { 
+            callback && callback();
+            return;
+        }
 
         var positions = this.state.selectedEpisode.podcast.positions,
             position = _.find(positions, { url: this.state.selectedEpisode.url });
@@ -188,9 +210,13 @@ var IndexComponent = React.createClass({
 
         position.currentTime = player.currentTime;
 
-        this.setState({ selectedEpisode: this.state.selectedEpisode });
+        this.setState({ selectedEpisode: this.state.selectedEpisode }, function () {
+            this.savePodcastList();
 
-        this.savePodcastList();
+            callback && callback();
+        });
+
+        
     },
     render: function () {
         return (
@@ -211,7 +237,7 @@ var IndexComponent = React.createClass({
                                 </span>
                             </div>
                         </p>
-                        <p>
+                        <p className="hidden-xs">
                             <button type="button" className="col-xs-12 btn btn-danger" onClick={this.deleteAllData}>
                                 <span className="glyphicon glyphicon-trash"></span> Delete All Data
                             </button>
@@ -233,6 +259,7 @@ var PodcastListComponent = React.createClass({
         select: React.PropTypes.func.isRequired,
         delete: React.PropTypes.func.isRequired
     },
+
     render: function () {
         return (
             <ul className="nav nav-pills">
@@ -241,8 +268,8 @@ var PodcastListComponent = React.createClass({
                         if (!podcast) { return; }
 
                         return (
-                            <li className={'col-xs-5 col-sm-12 ' + (this.props.selectedPodcast === podcast ? 'active' : '')} onClick={this.props.select.bind(null, podcast)}>
-                                <a className="col-xs-11" href="#">
+                            <li className={'col-xs-5 col-sm-12 ' + (this.props.selectedPodcast === podcast ? 'active' : '')} key={podcast.url}>
+                                <a className="col-xs-11" href="#" onClick={this.props.select.bind(null, podcast)}>
                                     <img src={podcast.image} className="col-xs-11 col-sm-4" />
                                     <div className="hidden-xs col-sm-7">{podcast.title}</div>
                                 </a>
@@ -281,10 +308,10 @@ var PodcastDisplayComponent = React.createClass({
             <div className="panel panel-default">
                 <div className="panel-heading">
                     <div className="row">
-                    <h3 className="panel-title col-xs-12 col-sm-10">
+                    <h3 className="panel-title col-xs-8 col-sm-10">
                         {this.props.data.title}
                     </h3>
-                    <p className={'col-xs-12 col-sm-2 ' + (this.props.data.listened.length === 0 ? 'hidden' : 'visible')}>
+                    <p className={'col-xs-4 col-sm-2 ' + (this.props.data.listened.length === 0 ? 'hidden' : 'visible')}>
                         <button type="button" className="btn btn-xs btn-default" onClick={this.toggleShowHidden}>{this.state.showHidden ? 'Hide' : 'Show' } Read</button>
                     </p>
                     </div>
@@ -305,7 +332,7 @@ var PodcastDisplayComponent = React.createClass({
                                     }
 
                                     return (
-                                        <tr className={(!this.state.showHidden && listened) ? 'hidden' : 'visible'}>
+                                        <tr className={(!this.state.showHidden && listened) ? 'hidden' : 'visible'} key={episode.url}>
                                             <td>
                                                 <div className="col-xs-12 col-sm-3">
                                                     <span title={episode.pubDate.format('LLLL')}>{date}</span><br />
@@ -314,10 +341,10 @@ var PodcastDisplayComponent = React.createClass({
                                                         <button type="button" className={'col-xs-6 col-sm-12 btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.togglePause}>
                                                             <span className="glyphicon glyphicon-pause"></span> Playing
                                                         </button>
-                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-default btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode)}>
+                                                        <button type="button" className={'col-xs-6 col-sm-12 btn ' + (position ? 'btn-info' : 'btn-default') + ' btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode)}>
                                                             <span className="glyphicon glyphicon-play"></span> {position || 'Play'}
                                                         </button>
-                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-sm ' + (listened ? 'btn-info' : 'btn-warning')} onClick={this.props.toggleListened.bind(null, episode)}>
+                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-sm ' + (listened ? 'btn-warning' : 'btn-danger')} onClick={this.props.toggleListened.bind(null, episode)}>
                                                             <span className="glyphicon glyphicon-check"></span> Mark {listened ? 'Unread' : 'Read'}
                                                         </button>
                                                     </p>
@@ -342,22 +369,35 @@ var PodcastDisplayComponent = React.createClass({
 var PodcastPlayerComponent = React.createClass({
     getInitialState: function () {
         return {
-            currentTime: null
+            player: null,
+            currentTime: null,
+            video: null,
         };
     },
-    componentDidMount: function () {
-        var player = this.refs.player.getDOMNode();
+    componentDidUpdate: function () {
+        var player = this.refs.player;
 
-        $(player).on('durationchange', function () {
-            var position = _.find(this.props.data.podcast.positions, { url: this.props.data.url });
+        if (player !== this.state.player) {
+            this.setState({ player: player }, function () {
+                var DOMNode = player.getDOMNode();
 
-            if (position && position.currentTime) {
-                player.currentTime = position.currentTime;
-            }
-        }.bind(this));
+                $(DOMNode)
+                    .on('durationchange', function () {
+                        var position = _.find(this.props.data.podcast.positions, { url: this.props.data.url });
 
-        $(player).on('pause', function () {
-            this.props.save();
+                        if (position && position.currentTime) {
+                            DOMNode.currentTime = position.currentTime;
+                        }
+                    }.bind(this))
+                    .on('pause', function () {
+                        this.props.save();
+                    }.bind(this));
+            });
+        }
+    },
+    toggleVideo: function () {
+        this.props.save(function () {
+            this.setState({ video: !this.state.video });
         }.bind(this));
     },
     getPlayer: function () {
@@ -367,6 +407,20 @@ var PodcastPlayerComponent = React.createClass({
         var episode = this.props.data || {};
         _.defaults(episode, { title: 'No episode selected', pubDate: moment(0) });
 
+        var player = (
+            <audio className="col-xs-12 col-sm-12" autoPlay="true" controls src={episode.url} ref="player">
+                Your browser does not support the audio element.
+            </audio>
+        );
+
+        if (this.state.video) {
+            player = (
+                <video className="col-xs-12 col-sm-12" autoPlay="true" controls src={episode.url} ref="player">
+                    Your browser does not support the video element.
+                </video>
+            );
+        }
+
         return (
             <div className="panel panel-default">
                 <div className="panel-heading">
@@ -375,9 +429,12 @@ var PodcastPlayerComponent = React.createClass({
                 <div className="panel-body">
                     <div className={'row ' + (episode.url ? 'visible' : 'hidden')}>
                         <div className="col-xs-12 col-sm-4">
-                            <video className="col-xs-12 col-sm-12" autoPlay="true" controls src={episode.url} ref="player">
-                                Your browser does not support the video element.
-                            </video>
+                            <p className="row">
+                                {player}
+                            </p>
+                            <p className="text-center row">
+                                <button type="button" className="btn btn-default" onClick={this.toggleVideo}>Switch to {this.state.video ? 'Audio' : 'Video'}</button>
+                            </p>
                         </div>
                         <div className="col-xs-12 col-sm-8">
                             <dl className="dl-horizontal">

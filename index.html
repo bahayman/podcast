@@ -59,11 +59,30 @@
       <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
     <![endif]-->
 
+    <script type="text/jsx" src="react/loading.js"></script>
     <script type="text/jsx" src="react/login.js"></script>
     <script type="text/jsx" src="react/index.js"></script>
 
     <script type="text/jsx">
         /** @jsx React.DOM */
+
+        var eventThingy = (function () {
+            var $obj = $({});
+
+            return {
+                trigger: function (name) {
+                    $obj.trigger(name);
+                },
+                on: function (name, callback) {
+                    $obj.on(name, callback)
+                },
+                off: function (name, callback) {
+                    $obj.off(name, callback);
+                }
+            };
+        })();
+
+        React.renderComponent(<LoadingComponent />, document.getElementById('loading'));
 
         function showIndex() {
             React.renderComponent(
@@ -92,16 +111,16 @@
                 </button>
                 <a class="navbar-brand" href="#">Simple Podcast Thingy</a>
             </div>
-            <div class="navbar-collapse collapse">
+            <!-- <div class="navbar-collapse collapse">
                 <ul class="nav navbar-nav navbar-right">
                     <li>
                         <a href="#help">Help</a>
                     </li>
                 </ul>
-            </div>
+            </div> -->
         </div>
     </div>
-    <div id="container" class="container">
-    </div>
+    <div id="container" class="container"></div>
+    <div id="loading" style="position: fixed; top: 0; width: 100%; z-index: 1000; text-align: center;"></div>
 </body>
 </html>
