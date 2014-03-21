@@ -17,7 +17,7 @@ var LoadingComponent = React.createClass({
             this.setState({ count: Math.max(this.state.count, 0) + 1 }, function () {
                 if (!this.state.dotsInterval) {
                     var dotsInterval = setInterval(function () {
-                        console.log(new Date());
+                        console.log(dotsInterval);
                         this.setState({ dots: this.state.dots.length === 3 ? '' : this.state.dots + '.' });
                     }.bind(this), 500);
 
@@ -28,11 +28,9 @@ var LoadingComponent = React.createClass({
 
         eventThingy.on('stop_loading', function () {
             this.setState({ count: this.state.count - 1 }, function () {
-                if (this.state.count <= 0) {
-                    if (this.state.dotsInterval) {
-                        clearInterval(this.state.dotsInterval);
-                        this.setState({ dotsInterval: false, dots: '' });
-                    }
+                if (this.state.count <= 0 && this.state.dotsInterval) {
+                    clearInterval(this.state.dotsInterval);
+                    this.setState({ dotsInterval: false, dots: '' });
                 }
             }.bind(this));
         }.bind(this));

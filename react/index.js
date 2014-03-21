@@ -46,11 +46,11 @@ var IndexComponent = React.createClass({
         this.state.podcasts.push({ url: url });
         this.setState({ podcasts: this.state.podcasts });
 
-        this.savePodcastList();
-
         node.value = '';
 
-        this.reloadPodcast(url);
+        this.savePodcastList(function () {
+            this.reloadPodcast(url);
+        }.bind(this));
     },
     deletePodcast: function (podcast) {
         if (confirm('Are you sure you want to remove the "' + podcast.title + '" podcast?')) {
@@ -64,7 +64,7 @@ var IndexComponent = React.createClass({
 
         return false;
     },
-    savePodcastList: function () {
+    savePodcastList: function (callback) {
         eventThingy.trigger('start_loading');
 
         gapi.client.appstate.states.delete({
@@ -86,6 +86,8 @@ var IndexComponent = React.createClass({
                 eventThingy.trigger('stop_loading');
 
                 console.log(response);
+
+                callback && callback();
             }.bind(this));
         }.bind(this));
     },
@@ -113,9 +115,11 @@ var IndexComponent = React.createClass({
         })
         .done(function (result) {
             if (result.query.count === 0) {
-                alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
-                this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) });
-                this.savePodcastList();
+                this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) }, function () {
+                    this.savePodcastList(function () {
+                        alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
+                    });
+                });
                 return;
             }
 
@@ -149,13 +153,15 @@ var IndexComponent = React.createClass({
             }, this);
         }.bind(this))
         .fail(function () {
-            alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
-            this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) });
-            this.savePodcastList();
+            this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) }, function () {
+                this.savePodcastList(function () {
+                    alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
+                });
+            });
         }.bind(this))
         .always(function () {
             eventThingy.trigger('stop_loading');
-        });
+        }.bind(this));
     },
     selectPodcast: function (podcast) {
         this.setState({ selectedPodcast: podcast });
