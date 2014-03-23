@@ -12,28 +12,25 @@ var LoadingComponent = React.createClass({
             dotsInterval: false,
         };
     },
-    componentDidMount: function () {
-        eventThingy.on('start_loading', function () {
-            this.setState({ count: Math.max(this.state.count, 0) + 1 }, function () {
-                if (!this.state.dotsInterval) {
-                    var dotsInterval = setInterval(function () {
-                        console.log(dotsInterval);
-                        this.setState({ dots: this.state.dots.length === 3 ? '' : this.state.dots + '.' });
-                    }.bind(this), 500);
+    start: function () {
+        this.setState({ count: Math.max(this.state.count, 0) + 1 }, function () {
+            if (!this.state.dotsInterval) {
+                var dotsInterval = setInterval(function () {
+                    console.log(dotsInterval);
+                    this.setState({ dots: this.state.dots.length === 3 ? '' : this.state.dots + '.' });
+                }.bind(this), 500);
 
-                    this.setState({ dotsInterval: dotsInterval });
-                }
-            }.bind(this));
-        }.bind(this));
-
-        eventThingy.on('stop_loading', function () {
-            this.setState({ count: this.state.count - 1 }, function () {
-                if (this.state.count <= 0 && this.state.dotsInterval) {
-                    clearInterval(this.state.dotsInterval);
-                    this.setState({ dotsInterval: false, dots: '' });
-                }
-            }.bind(this));
-        }.bind(this));
+                this.setState({ dotsInterval: dotsInterval });
+            }
+        });
+    },
+    stop: function () {
+        this.setState({ count: this.state.count - 1 }, function () {
+            if (this.state.count <= 0 && this.state.dotsInterval) {
+                clearInterval(this.state.dotsInterval);
+                this.setState({ dotsInterval: false, dots: '' });
+            }
+        });
     },
     render: function () {
         return (

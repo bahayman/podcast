@@ -1,40 +1,64 @@
 /** @jsx React.DOM */
 
 var IndexComponent = React.createClass({
+    propTypes: {
+        dropboxClient: React.PropTypes.instanceOf(Dropbox.Client).isRequired,
+        loadingComponent: React.PropTypes.component.isRequired,
+    },
     getDefaultProps: function () {
         return {
         };
     },
     getInitialState: function () {
         return {
-            currentStateVersion: {},
             selectedPodcast: null,
             selectedEpisode: null,
-            podcasts: []
+            datastore: null,
+            podcasts: [],
         };
     },
     componentWillMount: function () {
-        eventThingy.trigger('start_loading');
+        this.props.loadingComponent.start();
 
-        gapi.client.load('appstate', 'v1', function() {
-            gapi.client.appstate.states.list({
-                includeData: true
-            }).execute(function (response) {
-                console.log(response);
+        var datastoreManager = this.props.dropboxClient.getDatastoreManager();
+        datastoreManager.openDefaultDatastore(function (error, datastore) {
+            if (error) {
+                this.props.loadingComponent.stop();
+                alert('Error opening default datastore: ' + error);
+                return;
+            }
 
-                var podcastList = _.find(response.items, { stateKey: 0 });
-                if (podcastList) {
-                    this.state.currentStateVersion[0] = response.currentStateVersion;
-                    podcastList = JSON.parse(podcastList.data);
-                    this.setState({ currentStateVersion: this.state.currentStateVersion, podcasts: podcastList }, function () {
-                        if (_.isArray(podcastList)) {
-                            this.reloadPodcast();
+            this.setState({ datastore: datastore }, function () {
+                var datastore = this.state.datastore,
+                    podcastsTable = datastore.getTable('podcasts');
+
+                datastore.recordsChanged.addListener(function (event) {
+                    var changedPodcasts = event.affectedRecordsForTable('podcasts'),
+                        newPodcasts = [];
+
+                    _.forEach(changedPodcasts, function (podcast) {
+                        if (_.indexOf(this.state.podcasts, podcast) === -1) {
+                            newPodcasts.push(podcast);
                         }
-                    });
-                }
+                    }, this);
 
-                eventThingy.trigger('stop_loading');
-            }.bind(this));
+                    if (newPodcasts.length > 0) {
+                        Array.prototype.push.apply(this.state.podcasts, newPodcasts);
+                        this.setState({ podcasts: this.state.podcasts }, function () {
+                            this.reloadPodcasts(newPodcasts);
+                        });
+                    } else {
+                        this.forceUpdate();
+                    }
+
+                    console.log('records changed:', event.affectedRecordsForTable('podcasts'));
+                }.bind(this));
+
+                this.setState({ podcasts: podcastsTable.query() }, function () {
+                    this.reloadPodcasts();
+                    this.props.loadingComponent.stop();
+                });
+            });
         }.bind(this));
     },
     addPodcast: function () {
@@ -43,83 +67,51 @@ var IndexComponent = React.createClass({
 
         if (!url) { return; }
 
-        this.state.podcasts.push({ url: url });
-        this.setState({ podcasts: this.state.podcasts });
+        this.state.datastore.getTable('podcasts').insert({
+            url: url,
+        });
 
         node.value = '';
-
-        this.savePodcastList(function () {
-            this.reloadPodcast(url);
-        }.bind(this));
     },
     deletePodcast: function (podcast) {
         if (confirm('Are you sure you want to remove the "' + podcast.title + '" podcast?')) {
-            if (this.state.selectedPodcast === podcast) {
-                this.setState({ selectedPodcast: null });
-            }
-            this.setState({ podcasts: _.without(this.state.podcasts, podcast) });
+            podcast.deleteRecord();
 
-            this.savePodcastList();
+            this.setState({
+                podcasts: _.without(this.state.podcasts, podcast),
+                selectedPodcast: this.state.selectedPodcast === podcast ? null: this.state.selectedPodcast
+            });
         }
 
         return false;
     },
-    savePodcastList: function (callback) {
-        eventThingy.trigger('start_loading');
-
-        gapi.client.appstate.states.delete({
-            stateKey: 0
-        }).execute(function (response) {
-            console.log(response);
-            gapi.client.appstate.states.update({
-                stateKey: 0,
-                resource: {
-                    data: JSON.stringify(_.map(this.state.podcasts, function (podcast) {
-                        return {
-                            url: podcast.url,
-                            positions: podcast.positions,
-                            listened: podcast.listened
-                        }
-                    }, this))
-                }
-            }).execute(function (response) {
-                eventThingy.trigger('stop_loading');
-
-                console.log(response);
-
-                callback && callback();
-            }.bind(this));
-        }.bind(this));
-    },
     deleteAllData: function () {
         if (confirm('Are you sure you want to delete ALL data?')) {
-            this.setState({ podcasts: [] });
-            this.savePodcastList();
+            this.props.dropboxClient.getDatastoreManager().deleteDatastore(this.state.datastore.getId(), function () {
+                this.setState({
+                    podcasts: [],
+                    selectedPodcast: null,
+                    selectedEpisode: null
+                });
+            }.bind(this));
         }
     },
-    reloadPodcast: function (url) {
-        var reloadList = _(this.state.podcasts);
-        if (url) { 
-            reloadList = reloadList.where({ url: url });
-        } 
+    reloadPodcasts: function (podcasts) {
+        var reloadList = _(podcasts || this.state.podcasts);
 
         if (reloadList.value().length === 0) { return; }
 
-        eventThingy.trigger('start_loading');
+        this.props.loadingComponent.start();
 
         $.getJSON('http://query.yahooapis.com/v1/public/yql', {
             format: 'json',
             q: 'select * from xml where ' + reloadList.map(function (podcast) {
-                return 'url = "' + podcast.url + '"';
-            }).value().join(' or ')
+                return 'url = "' + podcast.get('url') + '"';
+            }, this).value().join(' or ')
         })
         .done(function (result) {
             if (result.query.count === 0) {
-                this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) }, function () {
-                    this.savePodcastList(function () {
-                        alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
-                    });
-                });
+                alert('TODO Fix invalid urls...');
                 return;
             }
 
@@ -130,8 +122,8 @@ var IndexComponent = React.createClass({
                 podcast.title = feed.channel.title;
                 podcast.image = (_.find(feed.channel.image, 'url') || { url: 'http://placehold.it/61x61&text=404' }).url;
                 podcast.episodes = [];
-                podcast.positions = podcast.positions || [];
-                podcast.listened = podcast.listened || [];
+                podcast.positions = podcast.getOrCreateList('positions');
+                podcast.listened = podcast.getOrCreateList('listened');
                 _.forEach(feed.channel.item, function (episode) {
                     episode = {
                         podcast: podcast,
@@ -147,20 +139,18 @@ var IndexComponent = React.createClass({
                     }, episode.duration).filter().value().slice(0, 2).join(' ');
                     podcast.episodes.push(episode);
                 });
-
-                // this.state.podcasts[podcast.url] = podcast;
-                this.setState({ podcasts: this.state.podcasts });
             }, this);
+
+            this.setState({ podcasts: this.state.podcasts });
         }.bind(this))
         .fail(function () {
+            reloadList.invoke('deleteRecord');
             this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) }, function () {
-                this.savePodcastList(function () {
-                    alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
-                });
+                alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
             });
         }.bind(this))
         .always(function () {
-            eventThingy.trigger('stop_loading');
+            this.props.loadingComponent.stop();
         }.bind(this));
     },
     selectPodcast: function (podcast) {
@@ -185,18 +175,13 @@ var IndexComponent = React.createClass({
         }
     },
     toggleListened: function (episode) {
-        var without = _.without(episode.podcast.listened, episode.url);
+        var index = _.indexOf(episode.podcast.listened.toArray(), episode.url);
 
-        // not removed from listened array, have to add it instead
-        if (without.length === episode.podcast.listened.length) {
+        if (index === -1) {
             episode.podcast.listened.push(episode.url);
         } else {
-            episode.podcast.listened = without;
+            episode.podcast.listened.remove(index);
         }
-
-        this.setState({ podcasts: this.state.podcasts });
-
-        this.savePodcastList();
     },
     saveCurrentTime: function (callback) {
         var player = this.refs.player.getPlayer().getDOMNode();
@@ -207,22 +192,23 @@ var IndexComponent = React.createClass({
         }
 
         var positions = this.state.selectedEpisode.podcast.positions,
-            position = _.find(positions, { url: this.state.selectedEpisode.url });
+            positionsArray = _.map(positions.toArray(), function (position) {
+                return JSON.parse(position);
+            }),
+            index = _.findIndex(positionsArray, { url: this.state.selectedEpisode.url }),
+            position = JSON.stringify({
+                url: this.state.selectedEpisode.url,
+                savedAt: _.now(),
+                currentTime: player.currentTime
+            });
 
-        if (!position) {
-            position = { url: this.state.selectedEpisode.url, savedAt: _.now() };
+        if (index === -1) {
             positions.push(position);
+        } else {
+            positions.set(index, position);
         }
 
-        position.currentTime = player.currentTime;
-
-        this.setState({ selectedEpisode: this.state.selectedEpisode }, function () {
-            this.savePodcastList();
-
-            callback && callback();
-        });
-
-        
+        callback && callback();
     },
     render: function () {
         return (
@@ -310,14 +296,18 @@ var PodcastDisplayComponent = React.createClass({
             );
         }
 
+        var positions = _.map(this.props.data.positions.toArray(), function (position) {
+            return JSON.parse(position);
+        });
+
         return (
             <div className="panel panel-default">
                 <div className="panel-heading">
                     <div className="row">
-                    <h3 className="panel-title col-xs-8 col-sm-10">
+                    <h3 className="panel-title col-xs-8 col-sm-9">
                         {this.props.data.title}
                     </h3>
-                    <p className={'col-xs-4 col-sm-2 ' + (this.props.data.listened.length === 0 ? 'hidden' : 'visible')}>
+                    <p style={{ textAlign: 'right' }} className={'col-xs-4 col-sm-3 ' + (this.props.data.listened.length() === 0 ? 'hidden' : 'visible')}>
                         <button type="button" className="btn btn-xs btn-default" onClick={this.toggleShowHidden}>{this.state.showHidden ? 'Hide' : 'Show' } Read</button>
                     </p>
                     </div>
@@ -327,11 +317,12 @@ var PodcastDisplayComponent = React.createClass({
                         <tbody>
                             {
                                 _.map(this.props.data.episodes, function (episode) {
-                                    var position = _.find(episode.podcast.positions, { url: episode.url }),
-                                        listened = _.contains(this.props.data.listened, episode.url),
+                                    var position = _.find(positions, { url: episode.url }),
+                                        listened = _.contains(this.props.data.listened.toArray(), episode.url),
                                         date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('dddd, MMM D, YYYY') : episode.pubDate.format('dddd');
 
                                     if (position && position.currentTime) {
+                                        episode.position = position;
                                         position = _(['hours', 'minutes', 'seconds']).map(function (unit) {
                                             return ('0' + this.get(unit)).slice(-2);
                                         }, moment.duration(position.currentTime * 1000)).value().join(':');
@@ -393,10 +384,8 @@ var PodcastPlayerComponent = React.createClass({
                         throttle();
                     }.bind(this))
                     .on('durationchange', function () {
-                        var position = _.find(this.props.data.podcast.positions, { url: this.props.data.url });
-
-                        if (position && position.currentTime) {
-                            DOMNode.currentTime = position.currentTime;
+                        if (this.props.data.position && this.props.data.position.currentTime) {
+                            DOMNode.currentTime = this.props.data.position.currentTime;
                         }
                     }.bind(this))
                     .on('pause', function () {

@@ -32,25 +32,7 @@
 
     <script src="js/bootstrap.min.js"></script>
 
-    <script type="text/javascript">
-
-        var clientId = '1003524583923-039l7f9uc3m4vet539hkctnruo9svm05.apps.googleusercontent.com',
-            apiKey = 'AIzaSyDvn7hIeo-Y08aRCAWRlp3BvT_xoSKtr10',
-            scopes = 'https://www.googleapis.com/auth/appstate';
-
-        function handleClientLoad() {
-            gapi.client.setApiKey(apiKey);
-            gapi.auth.authorize({client_id: clientId, scope: scopes, immediate: true}, function (authResult) {
-                if (authResult && !authResult.error) {
-                    showIndex();
-                } else {
-                    showLogin();
-                }
-            });
-        }
-
-    </script>
-    <script src="https://apis.google.com/js/client.js?onload=handleClientLoad"></script>
+    <script src="https://www.dropbox.com/static/api/dropbox-datastores-1.0-latest.js"></script>
 
     <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
     <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
@@ -66,37 +48,36 @@
     <script type="text/jsx">
         /** @jsx React.DOM */
 
-        var eventThingy = (function () {
-            var $obj = $({});
+        (function () {
+            var dropboxClient = new Dropbox.Client({key: 'a9edvhr31f7y0xp'}),
+                loadingComponent = React.renderComponent(<LoadingComponent />, document.getElementById('loading'));
 
-            return {
-                trigger: function (name) {
-                    $obj.trigger(name);
-                },
-                on: function (name, callback) {
-                    $obj.on(name, callback)
-                },
-                off: function (name, callback) {
-                    $obj.off(name, callback);
+            dropboxClient.authenticate({ interactive: false }, function (error, client) {
+                if (!error && client.isAuthenticated()) {
+                    showIndex();
+                } else {
+                    showLogin();
+
+                    if (error) {
+                        alert('Authentication error: ' + error);
+                    }
                 }
-            };
+            });
+
+            function showIndex() {
+                React.renderComponent(
+                    <IndexComponent dropboxClient={dropboxClient} loadingComponent={loadingComponent} />,
+                    document.getElementById('container')
+                );
+            }
+
+            function showLogin() {
+                React.renderComponent(
+                    <LoginComponent dropboxClient={dropboxClient} loadingComponent={loadingComponent} />,
+                    document.getElementById('container')
+                );
+            }
         })();
-
-        React.renderComponent(<LoadingComponent />, document.getElementById('loading'));
-
-        function showIndex() {
-            React.renderComponent(
-                <IndexComponent />,
-                document.getElementById('container')
-            );
-        }
-
-        function showLogin() {
-            React.renderComponent(
-                <LoginComponent />,
-                document.getElementById('container')
-            );
-        }
     </script>
 </head>
 <body>
