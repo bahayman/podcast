@@ -34,16 +34,26 @@ var IndexComponent = React.createClass({
 
                 datastore.recordsChanged.addListener(function (event) {
                     var changedPodcasts = event.affectedRecordsForTable('podcasts'),
-                        newPodcasts = [];
+                        newPodcasts = [],
+                        deletedPodcasts = [];
 
                     _.forEach(changedPodcasts, function (podcast) {
-                        if (_.indexOf(this.state.podcasts, podcast) === -1) {
+                        if (podcast.isDeleted()) {
+                            deletedPodcasts.push(podcast);
+                        } else if (_.indexOf(this.state.podcasts, podcast) === -1) {
                             newPodcasts.push(podcast);
                         }
                     }, this);
 
-                    if (newPodcasts.length > 0) {
-                        Array.prototype.push.apply(this.state.podcasts, newPodcasts);
+                    if (newPodcasts.length > 0 || deletedPodcasts.length > 0) {
+                        if (newPodcasts.length > 0) {
+                            Array.prototype.push.apply(this.state.podcasts, newPodcasts);
+                        }
+
+                        if (deletedPodcasts.length > 0) {
+                            this.state.podcasts = _.without.apply(null, [this.state.podcasts].concat(deletedPodcasts));
+                        }
+
                         this.setState({ podcasts: this.state.podcasts }, function () {
                             this.reloadPodcasts(newPodcasts);
                         });
@@ -78,7 +88,6 @@ var IndexComponent = React.createClass({
             podcast.deleteRecord();
 
             this.setState({
-                podcasts: _.without(this.state.podcasts, podcast),
                 selectedPodcast: this.state.selectedPodcast === podcast ? null: this.state.selectedPodcast
             });
         }
@@ -111,7 +120,8 @@ var IndexComponent = React.createClass({
         })
         .done(function (result) {
             if (result.query.count === 0) {
-                alert('TODO Fix invalid urls...');
+                reloadList.invoke('deleteRecord');
+                alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
                 return;
             }
 
@@ -119,11 +129,15 @@ var IndexComponent = React.createClass({
             
             reloadList.forEach(function (podcast, index) {
                 var feed = podcast._feed = feeds[index];
-                podcast.title = feed.channel.title;
-                podcast.image = (_.find(feed.channel.image, 'url') || { url: 'http://placehold.it/61x61&text=404' }).url;
+
                 podcast.episodes = [];
                 podcast.positions = podcast.getOrCreateList('positions');
                 podcast.listened = podcast.getOrCreateList('listened');
+
+                if (!feed) { return; }
+
+                podcast.title = feed.channel.title;
+                podcast.image = (_.find(_.isArray(feed.channel.image) ? feed.channel.image : [feed.channel.image], 'href') || { href: 'http://placehold.it/61x61&text=404' }).href;
                 _.forEach(feed.channel.item, function (episode) {
                     episode = {
                         podcast: podcast,
@@ -145,9 +159,7 @@ var IndexComponent = React.createClass({
         }.bind(this))
         .fail(function () {
             reloadList.invoke('deleteRecord');
-            this.setState({ podcasts: _.without.apply(null, [this.state.podcasts].concat(reloadList.value())) }, function () {
-                alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
-            });
+            alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
         }.bind(this))
         .always(function () {
             this.props.loadingComponent.stop();
@@ -237,7 +249,7 @@ var IndexComponent = React.createClass({
                         <hr className="visible-xs" />
                     </div>
                     <div className="col-xs-12 col-sm-8">
-                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} togglePause={this.togglePauseEpisode} toggleListened={this.toggleListened} />
+                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} togglePause={this.togglePauseEpisode} toggleListened={this.toggleListened} delete={this.deletePodcast} />
                     </div>
                 </div>
             </div>
@@ -251,7 +263,6 @@ var PodcastListComponent = React.createClass({
         select: React.PropTypes.func.isRequired,
         delete: React.PropTypes.func.isRequired
     },
-
     render: function () {
         return (
             <ul className="nav nav-pills">
@@ -260,7 +271,7 @@ var PodcastListComponent = React.createClass({
                         if (!podcast) { return; }
 
                         return (
-                            <li className={'col-xs-5 col-sm-12 ' + (this.props.selectedPodcast === podcast ? 'active' : '')} key={podcast.url}>
+                            <li className={'col-xs-5 col-sm-12 ' + (this.props.selectedPodcast === podcast ? 'active' : '')} key={podcast.get('url')}>
                                 <a className="col-xs-11" href="#" onClick={this.props.select.bind(null, podcast)}>
                                     <img src={podcast.image} className="col-xs-11 col-sm-4" />
                                     <div className="hidden-xs col-sm-7">{podcast.title}</div>
@@ -276,16 +287,33 @@ var PodcastListComponent = React.createClass({
 
 var PodcastDisplayComponent = React.createClass({
     propTypes: {
-        data: React.PropTypes.object,
-        play: React.PropTypes.func.isRequired
+        data: React.PropTypes.object.isRequired,
+        play: React.PropTypes.func.isRequired,
+        delete: React.PropTypes.func.isRequired,
     },
     getInitialState: function () {
         return {
-            showHidden: false
+            showHidden: false,
+            page: 0,
+            podcast: null
         };
+    },
+    componentDidUpdate: function () {
+        if (this.props.data !== this.state.podcast) {
+            this.setState({
+                page: 0,
+                podcast: this.props.data
+            });
+        }
     },
     toggleShowHidden: function () {
         this.setState({ showHidden: !this.state.showHidden });
+    },
+    nextPage: function () {
+        this.setState({ page: this.state.page + 1 });
+    },
+    prevPage: function () {
+        this.setState({ page: this.state.page - 1 });
     },
     render: function () {
         if (!this.props.data) {
@@ -296,19 +324,35 @@ var PodcastDisplayComponent = React.createClass({
             );
         }
 
-        var positions = _.map(this.props.data.positions.toArray(), function (position) {
-            return JSON.parse(position);
-        });
+        var start = this.state.page * 10,
+            end = start + 10,
+            episodes = this.props.data.episodes,
+            listenedArray = this.props.data.listened.toArray(),
+            positions = _.map(this.props.data.positions.toArray(), function (position) {
+                return JSON.parse(position);
+            });
+
+        if (!this.state.showHidden) {
+            episodes = _.reject(episodes, function (episode) {
+                return _.contains(listenedArray, episode.url);
+            });
+        }
+        episodes = episodes.slice(start, end);
 
         return (
             <div className="panel panel-default">
                 <div className="panel-heading">
                     <div className="row">
-                    <h3 className="panel-title col-xs-8 col-sm-9">
-                        {this.props.data.title}
+                    <h3 className="panel-title col-xs-12 col-sm-7">
+                         {this.props.data.title}
                     </h3>
-                    <p style={{ textAlign: 'right' }} className={'col-xs-4 col-sm-3 ' + (this.props.data.listened.length() === 0 ? 'hidden' : 'visible')}>
-                        <button type="button" className="btn btn-xs btn-default" onClick={this.toggleShowHidden}>{this.state.showHidden ? 'Hide' : 'Show' } Read</button>
+                    <p style={{ textAlign: 'right' }} className="col-xs-12 col-sm-5">
+                        <button type="button" className={'btn btn-xs btn-default ' + (listenedArray.length === 0 ? 'hidden' : 'visible')} onClick={this.toggleShowHidden}>
+                            <span className="glyphicon glyphicon-check"></span> {this.state.showHidden ? 'Hide' : 'Show' } Read
+                        </button>
+                        <button type="button" className="btn btn-xs btn-danger" onClick={this.props.delete.bind(null, this.props.data)}>
+                            <span className="glyphicon glyphicon-trash"></span> Delete Podcast
+                        </button>
                     </p>
                     </div>
                 </div>
@@ -316,9 +360,9 @@ var PodcastDisplayComponent = React.createClass({
                     <table className="table table-hover">
                         <tbody>
                             {
-                                _.map(this.props.data.episodes, function (episode) {
+                                _.map(episodes, function (episode) {
                                     var position = _.find(positions, { url: episode.url }),
-                                        listened = _.contains(this.props.data.listened.toArray(), episode.url),
+                                        listened = _.contains(listenedArray, episode.url),
                                         date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('dddd, MMM D, YYYY') : episode.pubDate.format('dddd');
 
                                     if (position && position.currentTime) {
@@ -329,7 +373,7 @@ var PodcastDisplayComponent = React.createClass({
                                     }
 
                                     return (
-                                        <tr className={(!this.state.showHidden && listened) ? 'hidden' : 'visible'} key={episode.url}>
+                                        <tr key={episode.url}>
                                             <td>
                                                 <div className="col-xs-12 col-sm-3">
                                                     <span title={episode.pubDate.format('LLLL')}>{date}</span><br />
@@ -357,6 +401,10 @@ var PodcastDisplayComponent = React.createClass({
                             }
                         </tbody>
                     </table>
+                    <p className={this.props.data.episodes.length <= 10 ? 'hidden' : 'visible'} style={{ textAlign: 'center' }}>
+                        <button type="button" className={'btn btn-default ' + (this.state.page > 0 ? 'visible' : 'hidden')} onClick={this.prevPage}>Prev</button>
+                        <button type="button" className={'btn btn-default ' + (end < this.props.data.episodes.length ? 'visible' : 'hidden')} onClick={this.nextPage}>Next</button>
+                    </p>
                 </div>
             </div>
         );
