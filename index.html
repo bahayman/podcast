@@ -48,6 +48,12 @@
     <script type="text/jsx">
         /** @jsx React.DOM */
 
+        // Force https
+        if (window.location.protocol !== 'https:' &&
+            window.location.hostname !== 'localhost') {
+            window.location = 'https://' + window.location.host + window.location.pathname;
+        }
+
         (function () {
             var dropboxClient = new Dropbox.Client({key: 'a9edvhr31f7y0xp'}),
                 loadingComponent = React.renderComponent(<LoadingComponent />, document.getElementById('loading'));
