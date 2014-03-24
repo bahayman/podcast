@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script type="text/javascript">
+     // Force https
+        if (window.location.protocol !== 'https:' &&
+            window.location.hostname !== 'localhost') {
+            window.location = 'https://' + window.location.host + window.location.pathname;
+        }
+    </script>
+
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -47,12 +55,6 @@
 
     <script type="text/jsx">
         /** @jsx React.DOM */
-
-        // Force https
-        if (window.location.protocol !== 'https:' &&
-            window.location.hostname !== 'localhost') {
-            window.location = 'https://' + window.location.host + window.location.pathname;
-        }
 
         (function () {
             var dropboxClient = new Dropbox.Client({key: 'a9edvhr31f7y0xp'}),

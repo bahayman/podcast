@@ -137,7 +137,15 @@ var IndexComponent = React.createClass({
                 if (!feed) { return; }
 
                 podcast.title = feed.channel.title;
-                podcast.image = (_.find(_.isArray(feed.channel.image) ? feed.channel.image : [feed.channel.image], 'href') || { href: 'http://placehold.it/61x61&text=404' }).href;
+                podcast.image = _(_.isArray(feed.channel.image) ? feed.channel.image : [feed.channel.image]);
+                podcast.image = _(Array.prototype.concat(
+                    podcast.image.pluck('url').value(),
+                    podcast.image.pluck('href').value(),
+                    'http://placehold.it/61x61&text=404'
+                ))
+                .filter()
+                .first();
+
                 _.forEach(feed.channel.item, function (episode) {
                     episode = {
                         podcast: podcast,
