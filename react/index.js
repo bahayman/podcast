@@ -138,7 +138,7 @@ var IndexComponent = React.createClass({
 
                 podcast.title = feed.channel.title;
                 podcast.image = _(_.isArray(feed.channel.image) ? feed.channel.image : [feed.channel.image]);
-                podcast.image = _(Array.prototype.concat(
+                podcast.image = _([].concat(
                     podcast.image.pluck('url').value(),
                     podcast.image.pluck('href').value(),
                     'http://placehold.it/61x61&text=404'
@@ -276,13 +276,19 @@ var PodcastListComponent = React.createClass({
             <ul className="nav nav-pills">
                 {
                     _.map(this.props.data, function (podcast) {
-                        if (!podcast) { return; }
+                        if (!podcast || !podcast.listened) { return; }
+
+                        var unreadCount = _.without.apply(null, [].concat([_.pluck(podcast.episodes, 'url')], podcast.listened.toArray())).length,
+                            badge = unreadCount > 0 ? <span className="badge pull-right">{unreadCount}</span> : '';
 
                         return (
                             <li className={'col-xs-5 col-sm-12 ' + (this.props.selectedPodcast === podcast ? 'active' : '')} key={podcast.get('url')}>
-                                <a className="col-xs-11" href="#" onClick={this.props.select.bind(null, podcast)}>
-                                    <img src={podcast.image} className="col-xs-11 col-sm-4" />
-                                    <div className="hidden-xs col-sm-7">{podcast.title}</div>
+                                <a className="col-xs-12" href="#" onClick={this.props.select.bind(null, podcast)}>
+                                    <img className="col-xs-12 col-sm-4" src={podcast.image} />
+                                    <div className="hidden-xs col-sm-8">
+                                        <span>{podcast.title}</span>
+                                    </div>
+                                    {badge}
                                 </a>
                             </li>
                         );
@@ -335,6 +341,7 @@ var PodcastDisplayComponent = React.createClass({
         var start = this.state.page * 10,
             end = start + 10,
             episodes = this.props.data.episodes,
+            episodesOnPage = [],
             listenedArray = this.props.data.listened.toArray(),
             positions = _.map(this.props.data.positions.toArray(), function (position) {
                 return JSON.parse(position);
@@ -345,7 +352,7 @@ var PodcastDisplayComponent = React.createClass({
                 return _.contains(listenedArray, episode.url);
             });
         }
-        episodes = episodes.slice(start, end);
+        episodesOnPage = episodes.slice(start, end);
 
         return (
             <div className="panel panel-default">
@@ -368,7 +375,7 @@ var PodcastDisplayComponent = React.createClass({
                     <table className="table table-hover">
                         <tbody>
                             {
-                                _.map(episodes, function (episode) {
+                                _.map(episodesOnPage, function (episode) {
                                     var position = _.find(positions, { url: episode.url }),
                                         listened = _.contains(listenedArray, episode.url),
                                         date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('dddd, MMM D, YYYY') : episode.pubDate.format('dddd');
@@ -409,9 +416,9 @@ var PodcastDisplayComponent = React.createClass({
                             }
                         </tbody>
                     </table>
-                    <p className={this.props.data.episodes.length <= 10 ? 'hidden' : 'visible'} style={{ textAlign: 'center' }}>
+                    <p className={episodes.length <= 10 ? 'hidden' : 'visible'} style={{ textAlign: 'center' }}>
                         <button type="button" className={'btn btn-default ' + (this.state.page > 0 ? 'visible' : 'hidden')} onClick={this.prevPage}>Prev</button>
-                        <button type="button" className={'btn btn-default ' + (end < this.props.data.episodes.length ? 'visible' : 'hidden')} onClick={this.nextPage}>Next</button>
+                        <button type="button" className={'btn btn-default ' + (end < episodes.length ? 'visible' : 'hidden')} onClick={this.nextPage}>Next</button>
                     </p>
                 </div>
             </div>
