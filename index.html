@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
     <script type="text/javascript">
-     // Force https
-        if (window.location.protocol !== 'https:' &&
-            window.location.hostname !== 'localhost') {
-            window.location = 'https://' + window.location.host + window.location.pathname;
+        if (window.location.hostname !== 'localhost') {
+            if (window.location.protocol !== 'https:' ||
+                window.location.hostname !== 'baruch.me') {
+                window.location = 'https://baruch.me' + window.location.pathname;
+            }
         }
     </script>
 
