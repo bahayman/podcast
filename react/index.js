@@ -484,6 +484,14 @@ var PodcastPlayerComponent = React.createClass({
                             DOMNode.currentTime = this.props.data.position.currentTime;
                         }
                     }.bind(this))
+                    .on('ended', function () {
+                        var episode = this.props.data,
+                            index = _.indexOf(episode.podcast.listened.toArray(), episode.url);
+
+                        if (index === -1) {
+                            episode.podcast.listened.push(episode.url);
+                        }
+                    }.bind(this))
                     .on('pause', function () {
                         this.props.save();
                     }.bind(this));
