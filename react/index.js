@@ -5,6 +5,7 @@ var IndexComponent = React.createClass({
         dropboxClient: React.PropTypes.instanceOf(Dropbox.Client).isRequired,
         loadingComponent: React.PropTypes.component.isRequired,
     },
+    datastore: null,
     getDefaultProps: function () {
         return {
         };
@@ -13,8 +14,8 @@ var IndexComponent = React.createClass({
         return {
             selectedPodcast: null,
             selectedEpisode: null,
-            datastore: null,
             podcasts: [],
+            settings: null
         };
     },
     componentWillMount: function () {
@@ -28,46 +29,63 @@ var IndexComponent = React.createClass({
                 return;
             }
 
-            this.setState({ datastore: datastore }, function () {
-                var datastore = this.state.datastore,
-                    podcastsTable = datastore.getTable('podcasts');
+            var podcastsTable = datastore.getTable('podcasts'),
+                settingsTable = datastore.getTable('settings');
 
-                datastore.recordsChanged.addListener(function (event) {
-                    var changedPodcasts = event.affectedRecordsForTable('podcasts'),
-                        newPodcasts = [],
-                        deletedPodcasts = [];
+            datastore.recordsChanged.addListener(function (event) {
+                var changedPodcasts = event.affectedRecordsForTable('podcasts'),
+                    newPodcasts = [],
+                    deletedPodcasts = [];
 
-                    _.forEach(changedPodcasts, function (podcast) {
-                        if (podcast.isDeleted()) {
-                            deletedPodcasts.push(podcast);
-                        } else if (_.indexOf(this.state.podcasts, podcast) === -1) {
-                            newPodcasts.push(podcast);
-                        }
-                    }, this);
+                _.forEach(changedPodcasts, function (podcast) {
+                    if (podcast.isDeleted()) {
+                        deletedPodcasts.push(podcast);
+                    } else if (_.indexOf(this.state.podcasts, podcast) === -1) {
+                        newPodcasts.push(podcast);
+                    }
+                }, this);
 
-                    if (newPodcasts.length > 0 || deletedPodcasts.length > 0) {
-                        if (newPodcasts.length > 0) {
-                            Array.prototype.push.apply(this.state.podcasts, newPodcasts);
-                        }
-
-                        if (deletedPodcasts.length > 0) {
-                            this.state.podcasts = _.without.apply(null, [this.state.podcasts].concat(deletedPodcasts));
-                        }
-
-                        this.setState({ podcasts: this.state.podcasts }, function () {
-                            this.reloadPodcasts(newPodcasts);
-                        });
-                    } else {
-                        this.forceUpdate();
+                if (newPodcasts.length > 0 || deletedPodcasts.length > 0) {
+                    if (newPodcasts.length > 0) {
+                        Array.prototype.push.apply(this.state.podcasts, newPodcasts);
                     }
 
-                    console.log('records changed:', event.affectedRecordsForTable('podcasts'));
-                }.bind(this));
+                    if (deletedPodcasts.length > 0) {
+                        this.state.podcasts = _.without.apply(null, [this.state.podcasts].concat(deletedPodcasts));
+                    }
 
-                this.setState({ podcasts: podcastsTable.query() }, function () {
-                    this.reloadPodcasts();
-                    this.props.loadingComponent.stop();
-                });
+                    this.setState({ podcasts: this.state.podcasts }, function () {
+                        this.reloadPodcasts(newPodcasts);
+                    });
+                } else {
+                    this.forceUpdate();
+                }
+
+                console.log('records changed:', event.affectedRecordsForTable('podcasts'));
+            }.bind(this));
+
+            this.setState({
+                podcasts: podcastsTable.query(),
+                settings: _.first(settingsTable.query()) || settingsTable.insert({})
+            }, function () {
+                this.reloadPodcasts(null, function () {
+                    var url = this.state.settings.get('last_episode'),
+                        podcast = null,
+                        episode = null;
+
+                    if (!url) { return; }
+
+                    podcast = _(this.state.podcasts).where({ episodes: [{ url: url }] }).first();
+                    if (podcast) {
+                        this.selectPodcast(podcast);
+
+                        episode = _(podcast.episodes).where({ url: url }).first();
+                        if (episode) {
+                            this.playEpisode(episode, true);
+                        }
+                    }
+                }.bind(this));
+                this.props.loadingComponent.stop();
             });
         }.bind(this));
     },
@@ -77,7 +95,7 @@ var IndexComponent = React.createClass({
 
         if (!url) { return; }
 
-        this.state.datastore.getTable('podcasts').insert({
+        this.datastore.getTable('podcasts').insert({
             url: url,
         });
 
@@ -96,7 +114,7 @@ var IndexComponent = React.createClass({
     },
     deleteAllData: function () {
         if (confirm('Are you sure you want to delete ALL data?')) {
-            this.props.dropboxClient.getDatastoreManager().deleteDatastore(this.state.datastore.getId(), function () {
+            this.props.dropboxClient.getDatastoreManager().deleteDatastore(this.datastore.getId(), function () {
                 this.setState({
                     podcasts: [],
                     selectedPodcast: null,
@@ -105,7 +123,7 @@ var IndexComponent = React.createClass({
             }.bind(this));
         }
     },
-    reloadPodcasts: function (podcasts) {
+    reloadPodcasts: function (podcasts, callback) {
         var reloadList = _(podcasts || this.state.podcasts);
 
         if (reloadList.value().length === 0) { return; }
@@ -120,7 +138,7 @@ var IndexComponent = React.createClass({
         })
         .done(function (result) {
             if (result.query.count === 0) {
-                reloadList.invoke('deleteRecord');
+                // reloadList.invoke('deleteRecord');
                 alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
                 return;
             }
@@ -166,11 +184,12 @@ var IndexComponent = React.createClass({
             this.setState({ podcasts: this.state.podcasts });
         }.bind(this))
         .fail(function () {
-            reloadList.invoke('deleteRecord');
+            // reloadList.invoke('deleteRecord');
             alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
         }.bind(this))
         .always(function () {
             this.props.loadingComponent.stop();
+            callback && callback();
         }.bind(this));
     },
     selectPodcast: function (podcast) {
@@ -178,10 +197,12 @@ var IndexComponent = React.createClass({
 
         return false;
     },
-    playEpisode: function (episode) {
+    playEpisode: function (episode, dontAutoPlay) {
         this.saveCurrentTime();
 
-        this.setState({ selectedEpisode: episode }, function () {
+        this.state.settings.set('last_episode', episode.url);
+
+        this.setState({ selectedEpisode: episode, autoPlay: !dontAutoPlay }, function () {
             $('window, body').animate({ scrollTop: 0 }, 'slow');
         }.bind(this));
     },
@@ -235,7 +256,7 @@ var IndexComponent = React.createClass({
             <div>
                 <div className="row">
                     <div className="col-xs-12">
-                        <PodcastPlayerComponent ref="player" data={this.state.selectedEpisode} save={this.saveCurrentTime} />
+                        <PodcastPlayerComponent ref="player" data={this.state.selectedEpisode} save={this.saveCurrentTime} autoPlay={this.state.autoPlay} settings={this.state.settings} />
                     </div>
                 </div>
                 <div className="row">
@@ -257,7 +278,7 @@ var IndexComponent = React.createClass({
                         <hr className="visible-xs" />
                     </div>
                     <div className="col-xs-12 col-sm-8">
-                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} togglePause={this.togglePauseEpisode} toggleListened={this.toggleListened} delete={this.deletePodcast} />
+                        <PodcastDisplayComponent data={this.state.selectedPodcast} selectedEpisode={this.state.selectedEpisode} play={this.playEpisode} togglePause={this.togglePauseEpisode} toggleListened={this.toggleListened} delete={this.deletePodcast} settings={this.state.settings} />
                     </div>
                 </div>
             </div>
@@ -307,10 +328,15 @@ var PodcastDisplayComponent = React.createClass({
     },
     getInitialState: function () {
         return {
-            showHidden: false,
+            showHidden: undefined,
             page: 0,
             podcast: null
         };
+    },
+    componentWillReceiveProps: function (props) {
+        if (this.state.showHidden === undefined && props.settings) {
+            this.setState({ showHidden: props.settings.get('show_hidden') });
+        }
     },
     componentDidUpdate: function () {
         if (this.props.data !== this.state.podcast) {
@@ -321,7 +347,9 @@ var PodcastDisplayComponent = React.createClass({
         }
     },
     toggleShowHidden: function () {
-        this.setState({ showHidden: !this.state.showHidden });
+        this.setState({ showHidden: !this.state.showHidden }, function () {
+            this.props.settings.set('show_hidden', this.state.showHidden);
+        });
     },
     nextPage: function () {
         this.setState({ page: this.state.page + 1 });
@@ -397,7 +425,7 @@ var PodcastDisplayComponent = React.createClass({
                                                         <button type="button" className={'col-xs-6 col-sm-12 btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.togglePause}>
                                                             <span className="glyphicon glyphicon-pause"></span> Playing
                                                         </button>
-                                                        <button type="button" className={'col-xs-6 col-sm-12 btn ' + (position ? 'btn-info' : 'btn-default') + ' btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode)}>
+                                                        <button type="button" className={'col-xs-6 col-sm-12 btn ' + (position ? 'btn-info' : 'btn-default') + ' btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode, false)}>
                                                             <span className="glyphicon glyphicon-play"></span> {position || 'Play'}
                                                         </button>
                                                         <button type="button" className={'col-xs-6 col-sm-12 btn btn-sm ' + (listened ? 'btn-warning' : 'btn-danger')} onClick={this.props.toggleListened.bind(null, episode)}>
@@ -431,8 +459,13 @@ var PodcastPlayerComponent = React.createClass({
         return {
             player: null,
             currentTime: null,
-            video: null,
+            video: undefined,
         };
+    },
+    componentWillReceiveProps: function (props) {
+        if (this.state.video === undefined && props.settings) {
+            this.setState({ video: props.settings.get('video') });
+        }
     },
     componentDidUpdate: function () {
         var player = this.refs.player;
@@ -459,7 +492,9 @@ var PodcastPlayerComponent = React.createClass({
     },
     toggleVideo: function () {
         this.props.save(function () {
-            this.setState({ video: !this.state.video });
+            this.setState({ video: !this.state.video }, function () {
+                this.props.settings.set('video', this.state.video);
+            });
         }.bind(this));
     },
     getPlayer: function () {
@@ -470,14 +505,14 @@ var PodcastPlayerComponent = React.createClass({
         _.defaults(episode, { title: 'No episode selected', pubDate: moment(0) });
 
         var player = (
-            <audio className="col-xs-12 col-sm-12" autoPlay="true" controls src={episode.url} ref="player">
+            <audio className="col-xs-12 col-sm-12" autoPlay={this.props.autoPlay} controls src={episode.url} ref="player">
                 Your browser does not support the audio element.
             </audio>
         );
 
         if (this.state.video) {
             player = (
-                <video className="col-xs-12 col-sm-12" autoPlay="true" controls src={episode.url} ref="player">
+                <video className="col-xs-12 col-sm-12" autoPlay={this.props.autoPlay} controls src={episode.url} ref="player">
                     Your browser does not support the video element.
                 </video>
             );
