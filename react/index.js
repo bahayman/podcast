@@ -29,6 +29,8 @@ var IndexComponent = React.createClass({
                 return;
             }
 
+            this.datastore = datastore;
+
             var podcastsTable = datastore.getTable('podcasts'),
                 settingsTable = datastore.getTable('settings');
 
