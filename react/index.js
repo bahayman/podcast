@@ -157,14 +157,18 @@ var IndexComponent = React.createClass({
                 if (!feed) { return; }
 
                 podcast.title = feed.channel.title;
-                podcast.image = _(_.isArray(feed.channel.image) ? feed.channel.image : [feed.channel.image]);
-                podcast.image = _([].concat(
-                    podcast.image.pluck('url').value(),
-                    podcast.image.pluck('href').value(),
-                    'http://placehold.it/61x61&text=404'
-                ))
-                .filter()
-                .first();
+                if (feed.channel.image) {
+                    podcast.image = _(_.isArray(feed.channel.image) ? feed.channel.image : [feed.channel.image]);
+                    podcast.image = _([].concat(
+                        podcast.image.pluck('url').value(),
+                        podcast.image.pluck('href').value(),
+                        'http://placehold.it/61x61&text=404'
+                    ))
+                    .filter()
+                    .first();
+                } else {
+                    podcast.image = 'http://placehold.it/61x61&text=404';
+                }
 
                 _.forEach(feed.channel.item, function (episode) {
                     episode = {
