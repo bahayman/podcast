@@ -71,17 +71,17 @@ var IndexComponent = React.createClass({
                 settings: _.first(settingsTable.query()) || settingsTable.insert({})
             }, function () {
                 this.reloadPodcasts(null, function () {
-                    var url = this.state.settings.get('last_episode'),
+                    var guid = this.state.settings.get('last_episode'),
                         podcast = null,
                         episode = null;
 
-                    if (!url) { return; }
+                    if (!guid) { return; }
 
-                    podcast = _(this.state.podcasts).where({ episodes: [{ url: url }] }).first();
+                    podcast = _(this.state.podcasts).where({ episodes: [{ guid: guid }] }).first();
                     if (podcast) {
                         this.selectPodcast(podcast);
 
-                        episode = _(podcast.episodes).where({ url: url }).first();
+                        episode = _(podcast.episodes).where({ guid: guid }).first();
                         if (episode) {
                             this.playEpisode(episode, true);
                         }
@@ -132,7 +132,7 @@ var IndexComponent = React.createClass({
 
         this.props.loadingComponent.start();
 
-        $.getJSON('http://query.yahooapis.com/v1/public/yql', {
+        $.getJSON('https://query.yahooapis.com/v1/public/yql', {
             format: 'json',
             q: 'select * from xml where ' + reloadList.map(function (podcast) {
                 return 'url = "' + podcast.get('url') + '"';
@@ -173,6 +173,7 @@ var IndexComponent = React.createClass({
                 _.forEach(feed.channel.item, function (episode) {
                     episode = {
                         podcast: podcast,
+                        guid: episode.guid.content || episode.guid,
                         url: (episode.content || episode.enclosure || {url: ''}).url,
                         title: episode.title,
                         subtitle: (episode.subtitle || $('<div></div>').html(episode.summary).text()),
@@ -206,7 +207,7 @@ var IndexComponent = React.createClass({
     playEpisode: function (episode, dontAutoPlay) {
         this.saveCurrentTime();
 
-        this.state.settings.set('last_episode', episode.url);
+        this.state.settings.set('last_episode', episode.guid);
 
         this.setState({ selectedEpisode: episode, autoPlay: !dontAutoPlay }, function () {
             $('window, body').animate({ scrollTop: 0 }, 'slow');
@@ -222,10 +223,10 @@ var IndexComponent = React.createClass({
         }
     },
     toggleListened: function (episode) {
-        var index = _.indexOf(episode.podcast.listened.toArray(), episode.url);
+        var index = _.indexOf(episode.podcast.listened.toArray(), episode.guid);
 
         if (index === -1) {
-            episode.podcast.listened.push(episode.url);
+            episode.podcast.listened.push(episode.guid);
         } else {
             episode.podcast.listened.remove(index);
         }
@@ -242,9 +243,9 @@ var IndexComponent = React.createClass({
             positionsArray = _.map(positions.toArray(), function (position) {
                 return JSON.parse(position);
             }),
-            index = _.findIndex(positionsArray, { url: this.state.selectedEpisode.url }),
+            index = _.findIndex(positionsArray, { guid: this.state.selectedEpisode.guid }),
             position = JSON.stringify({
-                url: this.state.selectedEpisode.url,
+                guid: this.state.selectedEpisode.guid,
                 savedAt: _.now(),
                 currentTime: player.currentTime
             });
@@ -305,11 +306,11 @@ var PodcastListComponent = React.createClass({
                     _.map(this.props.data, function (podcast) {
                         if (!podcast || !podcast.listened) { return; }
 
-                        var unreadCount = _.without.apply(null, [].concat([_.pluck(podcast.episodes, 'url')], podcast.listened.toArray())).length,
+                        var unreadCount = _.without.apply(null, [].concat([_.pluck(podcast.episodes, 'guid')], podcast.listened.toArray())).length,
                             badge = unreadCount > 0 ? <span className="badge pull-right">{unreadCount}</span> : '';
 
                         return (
-                            <li className={'col-xs-5 col-sm-12 ' + (this.props.selectedPodcast === podcast ? 'active' : '')} key={podcast.get('url')}>
+                            <li className={'col-xs-5 col-sm-12 ' + (this.props.selectedPodcast === podcast ? 'active' : '')} key={podcast.get('guid')}>
                                 <a className="col-xs-12" href="#" onClick={this.props.select.bind(null, podcast)}>
                                     <img className="col-xs-12 col-sm-4" src={podcast.image} />
                                     <div className="hidden-xs col-sm-8">
@@ -383,7 +384,7 @@ var PodcastDisplayComponent = React.createClass({
 
         if (!this.state.showHidden) {
             episodes = _.reject(episodes, function (episode) {
-                return _.contains(listenedArray, episode.url);
+                return _.contains(listenedArray, episode.guid);
             });
         }
         episodesOnPage = episodes.slice(start, end);
@@ -410,8 +411,8 @@ var PodcastDisplayComponent = React.createClass({
                         <tbody>
                             {
                                 _.map(episodesOnPage, function (episode) {
-                                    var position = _.find(positions, { url: episode.url }),
-                                        listened = _.contains(listenedArray, episode.url),
+                                    var position = _.find(positions, { guid: episode.guid }),
+                                        listened = _.contains(listenedArray, episode.guid),
                                         date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('dddd, MMM D, YYYY') : episode.pubDate.format('dddd');
 
                                     if (position && position.currentTime) {
@@ -422,7 +423,7 @@ var PodcastDisplayComponent = React.createClass({
                                     }
 
                                     return (
-                                        <tr key={episode.url}>
+                                        <tr key={episode.guid}>
                                             <td>
                                                 <div className="col-xs-12 col-sm-3">
                                                     <span title={episode.pubDate.format('LLLL')}>{date}</span><br />
@@ -492,10 +493,10 @@ var PodcastPlayerComponent = React.createClass({
                     }.bind(this))
                     .on('ended', function () {
                         var episode = this.props.data,
-                            index = _.indexOf(episode.podcast.listened.toArray(), episode.url);
+                            index = _.indexOf(episode.podcast.listened.toArray(), episode.guid);
 
                         if (index === -1) {
-                            episode.podcast.listened.push(episode.url);
+                            episode.podcast.listened.push(episode.guid);
                         }
                     }.bind(this))
                     .on('pause', function () {
