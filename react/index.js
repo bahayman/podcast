@@ -171,10 +171,12 @@ var IndexComponent = React.createClass({
                 }
 
                 _.forEach(feed.channel.item, function (episode) {
+                    var url = (episode.content || episode.enclosure || {url: ''}).url;
+
                     episode = {
                         podcast: podcast,
-                        guid: episode.guid.content || episode.guid,
-                        url: (episode.content || episode.enclosure || {url: ''}).url,
+                        guid: (episode.guid && episode.guid.content) || episode.guid || url,
+                        url: url,
                         title: episode.title,
                         subtitle: (episode.subtitle || $('<div></div>').html(episode.summary).text()),
                         pubDate: moment(episode.pubDate, 'ddd, DD MMM YYYY HH:mm:ss ZZ'),
