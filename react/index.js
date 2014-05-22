@@ -15,7 +15,8 @@ var IndexComponent = React.createClass({
             selectedPodcast: null,
             selectedEpisode: null,
             podcasts: [],
-            settings: null
+            settings: null,
+            deleteAllDataConfirm: false
         };
     },
     componentWillMount: function () {
@@ -115,14 +116,25 @@ var IndexComponent = React.createClass({
         return false;
     },
     deleteAllData: function () {
-        if (confirm('Are you sure you want to delete ALL data?')) {
-            this.props.dropboxClient.getDatastoreManager().deleteDatastore(this.datastore.getId(), function () {
-                this.setState({
-                    podcasts: [],
-                    selectedPodcast: null,
-                    selectedEpisode: null
-                });
-            }.bind(this));
+        if (this.state.deleteAllDataConfirm) {
+            if (confirm('Are you sure you want to delete ALL data?')) {
+                alert('deleted');
+
+                this.props.dropboxClient.getDatastoreManager().deleteDatastore(this.datastore.getId(), function () {
+                    this.setState({
+                        podcasts: [],
+                        selectedPodcast: null,
+                        selectedEpisode: null
+                    });
+                }.bind(this));
+            }
+            this.setState({ deleteAllDataConfirm: false });
+        } else {
+            this.setState({ deleteAllDataConfirm: true }, function () {
+                setTimeout(function () {
+                    this.setState({ deleteAllDataConfirm: false });
+                }.bind(this), 5000);
+            });
         }
     },
     reloadPodcasts: function (podcasts, callback) {
@@ -297,7 +309,7 @@ var IndexComponent = React.createClass({
                         </p>
                         <p className="hidden-xs">
                             <button type="button" className="col-xs-12 btn btn-danger" onClick={this.deleteAllData}>
-                                <span className="glyphicon glyphicon-trash"></span> Delete All Data
+                                <span className="glyphicon glyphicon-trash"></span> {this.state.deleteAllDataConfirm ? 'Are you sure?' : 'Delete All Data'}
                             </button>
                         </p>
                         <hr className="visible-xs" />
