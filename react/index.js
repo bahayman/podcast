@@ -432,7 +432,7 @@ var PodcastDisplayComponent = React.createClass({
                                     var position = _.find(positions, { guid: episode.guid }),
                                         listened = _.contains(listenedArray, episode.guid),
                                         date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('dddd, MMM D, YYYY') : episode.pubDate.format('dddd');
-                                    
+
                                     if (date === 'Invalid date') {
                                         date = episode.pubDate.fromNow();
                                     }
@@ -573,14 +573,20 @@ var PodcastPlayerComponent = React.createClass({
                             <p className="row">
                                 {player}
                             </p>
-                            <p className="text-center row">
-                                <button type="button" className="btn btn-default" onClick={_.partial(this.seek, -30)}>
-                                    <span className="glyphicon glyphicon-backward"></span>
-                                </button>
-                                <button type="button" className="btn btn-default" onClick={_.partial(this.seek, 30)}>
-                                    <span className="glyphicon glyphicon-forward"></span>
-                                </button>
-                                <button type="button" className="btn btn-default" onClick={this.toggleVideo}>Switch to {this.state.video ? 'Audio' : 'Video'}</button>
+                            <p className="row">
+                                <div className="pull-left">
+                                    <button type="button" className="btn btn-default" onClick={_.partial(this.seek, -30)}>
+                                        <span className="glyphicon glyphicon-backward"></span>
+                                    </button>
+                                    <button type="button" className="btn btn-default" onClick={_.partial(this.seek, 30)}>
+                                        <span className="glyphicon glyphicon-forward"></span>
+                                    </button>
+                                </div>
+                                <div className="pull-right">
+                                    <button type="button" className="btn btn-default" onClick={this.toggleVideo}>
+                                        <span className={ 'glyphicon glyphicon-' + (this.state.video ? 'music' : 'facetime-video') }></span>
+                                    </button>
+                                </div>
                             </p>
                         </div>
                         <div className="col-xs-12 col-sm-8">
