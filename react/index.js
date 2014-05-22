@@ -139,9 +139,7 @@ var IndexComponent = React.createClass({
                     return 'url = "' + podcast.get('url') + '"';
                 }, this).value().join(' or ')
             })
-            .done(function (result) {
-                resolve(result);
-            })
+            .done(resolve)
             .fail(function () {
                 reject(Error('Invalid feed URL: ' + reloadList.pluck('url').value().join(', ')));
             });
@@ -196,6 +194,9 @@ var IndexComponent = React.createClass({
                             return count === 0 ? false : count + ' ' + (count === 1 ? unit.slice(0, -1) : unit);
                         }, episode.duration).filter().value().slice(0, 2).join(' ');
                         podcast.episodes.push(episode);
+                    });
+                    podcast.episodes.sort(function (a, b) {
+                        return a.pubDate === b.pubDate ? 0 : b.pubDate - a.pubDate
                     });
                 })
                 .then(undefined, function (error) {
