@@ -132,13 +132,21 @@ var IndexComponent = React.createClass({
 
         this.props.loadingComponent.start();
 
-        $.getJSON('https://query.yahooapis.com/v1/public/yql', {
-            format: 'json',
-            q: 'select * from xml where ' + reloadList.map(function (podcast) {
-                return 'url = "' + podcast.get('url') + '"';
-            }, this).value().join(' or ')
+        new Promise(function (resolve, reject) {
+            $.getJSON('https://query.yahooapis.com/v1/public/yql', {
+                format: 'json',
+                q: 'select * from xml where ' + reloadList.map(function (podcast) {
+                    return 'url = "' + podcast.get('url') + '"';
+                }, this).value().join(' or ')
+            })
+            .done(function (result) {
+                resolve(result);
+            })
+            .fail(function () {
+                reject(Error('Invalid feed URL: ' + reloadList.pluck('url').value().join(', ')));
+            });
         })
-        .done(function (result) {
+        .then(function (result) {
             if (result.query.count === 0) {
                 // reloadList.invoke('deleteRecord');
                 alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
@@ -146,55 +154,64 @@ var IndexComponent = React.createClass({
             }
 
             feeds = result.query.count === 1 ? [result.query.results.rss] : result.query.results.rss;
-            
+
+            var sequence = Promise.resolve();
             reloadList.forEach(function (podcast, index) {
-                var feed = podcast._feed = feeds[index];
+                sequence.then(function () {
+                    var feed = podcast._feed = feeds[index];
 
-                podcast.episodes = [];
-                podcast.positions = podcast.getOrCreateList('positions');
-                podcast.listened = podcast.getOrCreateList('listened');
+                    podcast.episodes = [];
+                    podcast.positions = podcast.getOrCreateList('positions');
+                    podcast.listened = podcast.getOrCreateList('listened');
 
-                if (!feed) { return; }
+                    if (!feed) { return; }
 
-                podcast.title = feed.channel.title;
-                if (feed.channel.image) {
-                    podcast.image = _(_.isArray(feed.channel.image) ? feed.channel.image : [feed.channel.image]);
-                    podcast.image = _([].concat(
-                        podcast.image.pluck('url').value(),
-                        podcast.image.pluck('href').value(),
-                        'http://placehold.it/61x61&text=404'
-                    ))
-                    .filter()
-                    .first();
-                } else {
-                    podcast.image = 'http://placehold.it/61x61&text=404';
-                }
+                    podcast.title = feed.channel.title;
+                    if (feed.channel.image) {
+                        podcast.image = _(_.isArray(feed.channel.image) ? feed.channel.image : [feed.channel.image]);
+                        podcast.image = _([].concat(
+                            podcast.image.pluck('url').value(),
+                            podcast.image.pluck('href').value(),
+                            'http://placehold.it/61x61&text=404'
+                        ))
+                        .filter()
+                        .first();
+                    } else {
+                        podcast.image = 'http://placehold.it/61x61&text=404';
+                    }
 
-                _.forEach(feed.channel.item, function (episode) {
-                    episode = {
-                        podcast: podcast,
-                        guid: episode.guid.content || episode.guid,
-                        url: (episode.content || episode.enclosure || {url: ''}).url,
-                        title: episode.title,
-                        subtitle: (episode.subtitle || $('<div></div>').html(episode.summary).text()),
-                        pubDate: moment(episode.pubDate, 'ddd, DD MMM YYYY HH:mm:ss ZZ'),
-                        duration: moment.duration(("00:" + episode.duration).slice(-8)), 
-                    };
-                    episode.durationText = _(['days', 'hours', 'minutes', 'seconds']).map(function (unit) {
-                        var count = this.get(unit);
-                        return count === 0 ? false : count + ' ' + (count === 1 ? unit.slice(0, -1) : unit);
-                    }, episode.duration).filter().value().slice(0, 2).join(' ');
-                    podcast.episodes.push(episode);
+                    _.forEach(feed.channel.item, function (episode) {
+                        episode = {
+                            podcast: podcast,
+                            guid: episode.guid && (episode.guid.content || episode.guid),
+                            url: (episode.content || episode.enclosure || {url: ''}).url,
+                            title: episode.title,
+                            subtitle: (episode.subtitle || $('<div></div>').html(episode.summary).text()),
+                            pubDate: moment(episode.pubDate, 'ddd, DD MMM YYYY HH:mm:ss ZZ'),
+                            duration: moment.duration(("00:" + episode.duration).slice(-8)), 
+                        };
+                        episode.guid = episode.guid || episode.url;
+                        episode.durationText = _(['days', 'hours', 'minutes', 'seconds']).map(function (unit) {
+                            var count = this.get(unit);
+                            return count === 0 ? false : count + ' ' + (count === 1 ? unit.slice(0, -1) : unit);
+                        }, episode.duration).filter().value().slice(0, 2).join(' ');
+                        podcast.episodes.push(episode);
+                    });
+                })
+                .then(undefined, function (error) {
+                    alert((podcast && (podcast.title + ': ')) + error);
                 });
-            }, this);
+            });
+            sequence.then(function () {
+                this.setState({ podcasts: this.state.podcasts });
+            }.bind(this));
 
-            this.setState({ podcasts: this.state.podcasts });
+            return sequence;
         }.bind(this))
-        .fail(function () {
-            // reloadList.invoke('deleteRecord');
-            alert('Invalid feed URL: ' + reloadList.pluck('url').value().join(', '));
-        }.bind(this))
-        .always(function () {
+        .then(undefined, function (error) {
+            alert(error);
+        })
+        .then(function () {
             this.props.loadingComponent.stop();
             callback && callback();
         }.bind(this));
@@ -414,6 +431,10 @@ var PodcastDisplayComponent = React.createClass({
                                     var position = _.find(positions, { guid: episode.guid }),
                                         listened = _.contains(listenedArray, episode.guid),
                                         date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('dddd, MMM D, YYYY') : episode.pubDate.format('dddd');
+                                    
+                                    if (date === 'Invalid date') {
+                                        date = episode.pubDate.fromNow();
+                                    }
 
                                     if (position && position.currentTime) {
                                         episode.position = position;
