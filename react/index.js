@@ -533,11 +533,11 @@ var PodcastPlayerComponent = React.createClass({
             });
         }.bind(this));
     },
-    rewind: function () {
+    seek: function (time) {
         var player = this.getPlayer(),
             DOMNode = player.getDOMNode();
 
-        DOMNode.currentTime = Math.max(0, DOMNode.currentTime - 30);
+        DOMNode.currentTime = Math.max(0, DOMNode.currentTime + time);
         this.props.save();
     },
     getPlayer: function () {
@@ -573,8 +573,11 @@ var PodcastPlayerComponent = React.createClass({
                                 {player}
                             </p>
                             <p className="text-center row">
-                                <button type="button" className="btn btn-default" onClick={this.rewind}>
+                                <button type="button" className="btn btn-default" onClick={_.partial(this.seek, -30)}>
                                     <span className="glyphicon glyphicon-backward"></span> 30
+                                </button>
+                                <button type="button" className="btn btn-default" onClick={_.partial(this.seek, 30)}>
+                                    <span className="glyphicon glyphicon-forward"></span> 30
                                 </button>
                                 <button type="button" className="btn btn-default" onClick={this.toggleVideo}>Switch to {this.state.video ? 'Audio' : 'Video'}</button>
                             </p>
