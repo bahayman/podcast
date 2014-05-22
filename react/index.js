@@ -578,7 +578,7 @@ var PodcastPlayerComponent = React.createClass({
                                     <span className="glyphicon glyphicon-backward"></span> 30
                                 </button>
                                 <button type="button" className="btn btn-default" onClick={_.partial(this.seek, 30)}>
-                                    <span className="glyphicon glyphicon-forward"></span> 30
+                                    30 <span className="glyphicon glyphicon-forward"></span>
                                 </button>
                                 <button type="button" className="btn btn-default" onClick={this.toggleVideo}>Switch to {this.state.video ? 'Audio' : 'Video'}</button>
                             </p>
