@@ -196,7 +196,7 @@ var IndexComponent = React.createClass({
                         podcast.episodes.push(episode);
                     });
                     podcast.episodes.sort(function (a, b) {
-                        return a.pubDate === b.pubDate ? 0 : b.pubDate - a.pubDate
+                        return b.pubDate - a.pubDate;
                     });
                 })
                 .then(undefined, function (error) {
