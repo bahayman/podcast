@@ -496,7 +496,7 @@ var PodcastPlayerComponent = React.createClass({
         }
     },
     componentDidUpdate: function () {
-        var player = this.refs.player;
+        var player = this.getPlayer();
 
         if (player !== this.state.player) {
             this.setState({ player: player }, function () {
@@ -533,6 +533,13 @@ var PodcastPlayerComponent = React.createClass({
             });
         }.bind(this));
     },
+    rewind: function () {
+        var player = this.getPlayer(),
+            DOMNode = player.getDOMNode();
+
+        DOMNode.currentTime = Math.max(0, DOMNode.currentTime - 30);
+        this.props.save();
+    },
     getPlayer: function () {
         return this.refs.player;
     },
@@ -566,6 +573,9 @@ var PodcastPlayerComponent = React.createClass({
                                 {player}
                             </p>
                             <p className="text-center row">
+                                <button type="button" className="btn btn-default" onClick={this.rewind}>
+                                    <span className="glyphicon glyphicon-backward"></span> 30
+                                </button>
                                 <button type="button" className="btn btn-default" onClick={this.toggleVideo}>Switch to {this.state.video ? 'Audio' : 'Video'}</button>
                             </p>
                         </div>
