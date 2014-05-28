@@ -581,7 +581,7 @@ var PodcastPlayerComponent = React.createClass({
                 </div>
                 <div className="panel-body">
                     <div className={'row ' + (episode.url ? 'visible' : 'hidden')}>
-                        <div className="col-xs-12 col-sm-4">
+                        <div className="col-xs-12 col-sm-5 col-md-4">
                             <p className="row">
                                 {player}
                             </p>
@@ -601,7 +601,7 @@ var PodcastPlayerComponent = React.createClass({
                                 </div>
                             </p>
                         </div>
-                        <div className="col-xs-12 col-sm-8">
+                        <div className="col-xs-12 col-sm-7 col-md-8">
                             <dl className="dl-horizontal">
                                 <dt>Date</dt>
                                 <dd>
