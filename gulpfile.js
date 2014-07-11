@@ -9,27 +9,28 @@ var reactify = require('reactify');
 
 gulp.task('default', function () {
     var bundler = watchify('./src/main.js', {
-        debug : gutil.env.type !== 'production'
+        debug : gutil.env.debug
     });
 
     bundler.transform('reactify')
 
-    if (gutil.env.type === 'production') {
-        bundler.close();
-    } else {
-        bundler.on('update', rebundle)
-    }
+    bundler.on('update', rebundle)
+    bundler.on('time', function (time) {
+        gutil.log('Finished Browserifying after', gutil.colors.cyan((time / 1000) + ' s'));
+    });
 
-    function rebundle() {
-        gutil.log('Browserifying...');
+    function rebundle(ids) {
+        if (ids) {
+            gutil.log('Browserifying for change in:', gutil.colors.magenta(ids));
+        }
+
         return bundler.bundle()
             .on('error', function(e) {
                 gutil.log('Browserify Error', e);
             })
             .pipe(source('bundle.js'))
-            .pipe(gutil.env.type === 'production' ? streamify(uglify()) : gutil.noop())
+            .pipe(gutil.env.debug ? gutil.noop() : streamify(uglify()))
             .pipe(gulp.dest('./js'))
-            .pipe(gutil.noop(gutil.log('Done.')))
     }
 
     return rebundle();
