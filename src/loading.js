@@ -1,5 +1,7 @@
 /** @jsx React.DOM */
 
+var React = require('react')
+
 var LoadingComponent = React.createClass({
     getDefaultProps: function () {
         return {
@@ -40,3 +42,5 @@ var LoadingComponent = React.createClass({
         );
     }
 });
+
+module.exports = LoadingComponent;

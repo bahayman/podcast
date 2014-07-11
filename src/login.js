@@ -1,5 +1,7 @@
 /** @jsx React.DOM */
 
+var React = require('react')
+
 var LoginComponent = React.createClass({
     propTypes: {
         dropboxClient: React.PropTypes.instanceOf(Dropbox.Client).isRequired,
@@ -34,3 +36,5 @@ var LoginComponent = React.createClass({
         );
     }
 });
+
+module.exports = LoginComponent;

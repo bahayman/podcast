@@ -1,5 +1,11 @@
 /** @jsx React.DOM */
 
+var React = require('react');
+var Promise = require('es6-promise').Promise;
+var moment = require('moment');
+var $ = require('jquery');
+var _ = require('lodash');
+
 var IndexComponent = React.createClass({
     propTypes: {
         dropboxClient: React.PropTypes.instanceOf(Dropbox.Client).isRequired,
@@ -621,3 +627,5 @@ var PodcastPlayerComponent = React.createClass({
         );
     }
 });
+
+module.exports = IndexComponent;
