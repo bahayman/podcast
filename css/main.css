@@ -1,0 +1,1 @@
+table.episodes.condensed tr:not(.selected):not(.clicked) .hide-condensed { display: none; }

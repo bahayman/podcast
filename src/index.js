@@ -373,7 +373,8 @@ var PodcastDisplayComponent = React.createClass({
         return {
             showHidden: undefined,
             page: 0,
-            podcast: null
+            podcast: null,
+            search: ''
         };
     },
     componentWillReceiveProps: function (props) {
@@ -385,7 +386,8 @@ var PodcastDisplayComponent = React.createClass({
         if (this.props.data !== this.state.podcast) {
             this.setState({
                 page: 0,
-                podcast: this.props.data
+                podcast: this.props.data,
+                search: ''
             });
         }
     },
@@ -400,6 +402,15 @@ var PodcastDisplayComponent = React.createClass({
     prevPage: function () {
         this.setState({ page: this.state.page - 1 });
     },
+    searchChange: function (event) {
+        this.setState({ search: event.target.value });
+    },
+    searchClear: function (event) {
+        this.setState({ search: '' });
+    },
+    episodeClick: function (event) {
+        $(event.currentTarget).siblings().removeClass('clicked').end().toggleClass('clicked');
+    },
     render: function () {
         if (!this.props.data) {
             return (
@@ -409,10 +420,9 @@ var PodcastDisplayComponent = React.createClass({
             );
         }
 
-        var start = this.state.page * 10,
-            end = start + 10,
-            episodes = this.props.data.episodes,
+        var episodes = this.props.data.episodes,
             episodesOnPage = [],
+            condensed = false,
             listenedArray = this.props.data.listened.toArray(),
             positions = _.map(this.props.data.positions.toArray(), function (position) {
                 return JSON.parse(position);
@@ -421,79 +431,125 @@ var PodcastDisplayComponent = React.createClass({
         if (!this.state.showHidden) {
             episodes = _.reject(episodes, function (episode) {
                 return _.contains(listenedArray, episode.guid);
-            });
+            }), this;
         }
+        if (this.state.search.length > 0) {
+            episodes = _.filter(episodes, function (episode) {
+                return episode.title.toLowerCase().indexOf(this.state.search) > -1 || episode.subtitle.toLowerCase().indexOf(this.state.search) > -1;
+            }, this);
+        }
+
+        if (episodes.length > 25) {
+            condensed = true;
+        }
+        var perPage = condensed ? 25 : 10,
+            pagesCount = Math.ceil(episodes.length / perPage),
+            start = this.state.page * perPage,
+            end = start + perPage;
         episodesOnPage = episodes.slice(start, end);
+
 
         return (
             <div className="panel panel-default">
                 <div className="panel-heading">
-                    <div className="row">
-                    <h3 className="panel-title col-xs-12 col-sm-7">
-                         {this.props.data.title}
+                    <h3 className="panel-title">
+                        {this.props.data.title}
+                        <span className="badge pull-right alert-info">{episodes.length}</span>
                     </h3>
-                    <p style={{ textAlign: 'right' }} className="col-xs-12 col-sm-5">
-                        <button type="button" className={'btn btn-xs btn-default ' + (listenedArray.length === 0 ? 'hidden' : 'visible')} onClick={this.toggleShowHidden}>
-                            <span className="glyphicon glyphicon-check"></span> {this.state.showHidden ? 'Hide' : 'Show' } Read
-                        </button>
-                        <button type="button" className="btn btn-xs btn-danger" onClick={this.props.delete.bind(null, this.props.data)}>
-                            <span className="glyphicon glyphicon-trash"></span> Delete Podcast
-                        </button>
-                    </p>
-                    </div>
                 </div>
                 <div className="panel-body">
-                    <table className="table table-hover">
-                        <tbody>
-                            {
-                                _.map(episodesOnPage, function (episode) {
-                                    var position = _.find(positions, { guid: episode.guid }),
-                                        listened = _.contains(listenedArray, episode.guid),
-                                        date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('dddd, MMM D, YYYY') : episode.pubDate.format('dddd');
+                    <div className="row">
+                        <div className="panel-title col-xs-12 col-sm-7">
+                            <div className="input-group input-group-sm">
+                                <span className="input-group-addon">
+                                    <span className="glyphicon glyphicon-search"></span>
+                                </span>
+                                <input type="search" className="form-control" value={this.state.search} onChange={this.searchChange} />
+                                <span className="input-group-btn">
+                                    <button className="btn btn-default" type="button" onClick={this.searchClear}>
+                                        <span className="glyphicon glyphicon-remove"></span>
+                                    </button>
+                                </span>
+                            </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }} className="col-xs-12 col-sm-5">
+                            <button type="button" className={'btn btn-xs btn-default ' + (listenedArray.length === 0 ? 'hidden' : 'visible')} onClick={this.toggleShowHidden}>
+                                <span className="glyphicon glyphicon-check"></span> {this.state.showHidden ? 'Hide' : 'Show' } Read
+                            </button>
+                            <button type="button" className="btn btn-xs btn-danger" onClick={this.props.delete.bind(null, this.props.data)}>
+                                <span className="glyphicon glyphicon-trash"></span> Delete Podcast
+                            </button>
+                        </div>
+                    </div>
+                    <div className={'row ' + (episodes.length === 0 ? 'visible' : 'hidden')}>
+                        <br />
+                        <p className="col-xs-10 col-xs-offset-1 alert alert-info" style={{ textAlign: 'center' }}>
+                            <strong>No Episodes</strong>
+                        </p>
+                    </div>
+                </div>
+                <table className={'table table-hover episodes ' + (condensed ? 'condensed' : '')}>
+                    <tbody>
+                        {
+                            _.map(episodesOnPage, function (episode) {
+                                var position = _.find(positions, { guid: episode.guid }),
+                                    listened = _.contains(listenedArray, episode.guid),
+                                    date = moment().diff(episode.pubDate, 'days') >= 7 ? episode.pubDate.format('ddd, MMM D, YYYY') : episode.pubDate.format('dddd');
 
-                                    if (date === 'Invalid date') {
-                                        date = episode.pubDate.fromNow();
-                                    }
+                                if (date === 'Invalid date') {
+                                    date = episode.pubDate.fromNow();
+                                }
 
-                                    if (position && position.currentTime) {
-                                        episode.position = position;
-                                        position = _(['hours', 'minutes', 'seconds']).map(function (unit) {
-                                            return ('0' + this.get(unit)).slice(-2);
-                                        }, moment.duration(position.currentTime * 1000)).value().join(':');
-                                    }
+                                if (position && position.currentTime) {
+                                    episode.position = position;
+                                    position = _(['hours', 'minutes', 'seconds']).map(function (unit) {
+                                        return ('0' + this.get(unit)).slice(-2);
+                                    }, moment.duration(position.currentTime * 1000)).value().join(':');
+                                }
 
-                                    return (
-                                        <tr key={episode.guid}>
-                                            <td>
-                                                <div className="col-xs-12 col-sm-3">
-                                                    <span title={episode.pubDate.format('LLLL')}>{date}</span><br />
-                                                    <small>{episode.durationText}</small>
-                                                    <p>
-                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.togglePause}>
-                                                            <span className="glyphicon glyphicon-pause"></span> Playing
-                                                        </button>
-                                                        <button type="button" className={'col-xs-6 col-sm-12 btn ' + (position ? 'btn-info' : 'btn-default') + ' btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode, false)}>
-                                                            <span className="glyphicon glyphicon-play"></span> {position || 'Play'}
-                                                        </button>
-                                                        <button type="button" className={'col-xs-6 col-sm-12 btn btn-sm ' + (listened ? 'btn-warning' : 'btn-danger')} onClick={this.props.toggleListened.bind(null, episode)}>
-                                                            <span className="glyphicon glyphicon-check"></span> Mark {listened ? 'Unread' : 'Read'}
-                                                        </button>
-                                                    </p>
-                                                </div>
-                                                <div className="col-xs-12 col-sm-9">
-                                                    <h5>{episode.title}</h5>
-                                                    <p><small>{episode.subtitle}</small></p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                }, this)
-                            }
-                        </tbody>
-                    </table>
-                    <p className={episodes.length <= 10 ? 'hidden' : 'visible'} style={{ textAlign: 'center' }}>
+                                return (
+                                    <tr key={episode.guid} className={episode === this.props.selectedEpisode ? 'selected' : ''} onClick={this.episodeClick}>
+                                        <td>
+                                            <div className="col-xs-12 col-sm-3">
+                                                <span title={episode.pubDate.format('LLLL')}>{date}</span><br />
+                                                <small className="hide-condensed">{episode.durationText}</small>
+                                                <p className="hide-condensed">
+                                                    <button type="button" className={'col-xs-6 col-sm-12 btn btn-success btn-sm ' + (episode !== this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.togglePause}>
+                                                        <span className="glyphicon glyphicon-pause"></span> Playing
+                                                    </button>
+                                                    <button type="button" className={'col-xs-6 col-sm-12 btn ' + (position ? 'btn-info' : 'btn-default') + ' btn-sm ' + (episode === this.props.selectedEpisode ? 'hidden' : 'visible')} onClick={this.props.play.bind(null, episode, false)}>
+                                                        <span className="glyphicon glyphicon-play"></span> {position || 'Play'}
+                                                    </button>
+                                                    <button type="button" className={'col-xs-6 col-sm-12 btn btn-sm ' + (listened ? 'btn-warning' : 'btn-danger')} onClick={this.props.toggleListened.bind(null, episode)}>
+                                                        <span className="glyphicon glyphicon-check"></span> Mark {listened ? 'Unread' : 'Read'}
+                                                    </button>
+                                                </p>
+                                            </div>
+                                            <div className="col-xs-12 col-sm-9">
+                                                <strong>{episode.title}</strong>
+                                                <p className="hide-condensed">
+                                                    <small>
+                                                        {episode.subtitle}
+                                                    </small>
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            }, this)
+                        }
+                    </tbody>
+                </table>
+                <div className={'panel-footer ' + (episodes.length <= 10 ? 'hidden' : 'visible')}>
+                    <p className="row" style={{ textAlign: 'center' }}>
                         <button type="button" className={'btn btn-default ' + (this.state.page > 0 ? 'visible' : 'hidden')} onClick={this.prevPage}>Prev</button>
                         <button type="button" className={'btn btn-default ' + (end < episodes.length ? 'visible' : 'hidden')} onClick={this.nextPage}>Next</button>
+                        <br />
+                        <span>
+                            <small>
+                                Page {this.state.page + 1} of {pagesCount}
+                            </small>
+                        </span>
                     </p>
                 </div>
             </div>
